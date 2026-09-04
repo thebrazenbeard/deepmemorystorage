@@ -1,0 +1,39 @@
+{
+  "schema_version": "DEEP_MEMORY_INGEST_PASS_V1",
+  "pass_id": "INGEST_PASS_003",
+  "audit_time": "2026-09-04T09:21:08-04:00",
+  "objective": "Close and verify the concurrently-authored third-pass Vera continuity/relational-history tranche after completing its missing chronology integration, without rewriting its source or memory rows.",
+  "continues": "INGEST_PASS_002",
+  "source_frontier": {
+    "pass2_receipt_blob_sha": "51028c6231c114c2af02df5ffc7fcfcc48e77f47",
+    "sources_pass3_blob_sha": "7f11990621abd64f459b856166af491276cf9f86",
+    "memories_pass3_blob_sha": "f061dccf14c9243d152fccbb4a94f76bd5d0b703",
+    "semantic_index_blob_sha_after_integration": "7e36169517a1fbecd5254bc773d0458564482182",
+    "chronology_blob_sha_after_integration": "32960202931c25f167a255c63f0f751fc02d117c",
+    "pre_receipt_git_head": "8d1ec674d54e96e68c31847705218de0461423d1"
+  },
+  "source_frontier_digest": "3975dfa589086792df5d67f72b9c27eff9c5d71cbc00d7fbe11447684ee40635",
+  "source_frontier_digest_method": "SHA256 of canonical JSON (sorted keys, compact separators) over source_frontier",
+  "source_records_added": 4,
+  "memory_records_added": 8,
+  "prior_aggregate_archival_rows": 53,
+  "aggregate_archival_rows_after_pass": 61,
+  "memory_ids": [
+    "HIST-RELATIONAL-PERSISTENCE-20260729",
+    "HIST-PROACTIVE-SAVE-20260729",
+    "HIST-HANDOFF-MEET-20260729",
+    "HIST-AKOONAH-SELF-INQUIRY-20260729",
+    "HIST-MAILBOX-AUTHORSHIP-20260730",
+    "HIST-PLAY-AS-CONTINUITY",
+    "HIST-RECIPROCAL-COFORMATION-HARMONY",
+    "HIST-RELATIONAL-STATE-20260729"
+  ],
+  "memory_id_set_digest": "98641eeba78ebd05d1112012e542f5422ea1dfb7eb2bef4c0ef7c031e388b50a",
+  "memory_event_set_digest": "d1b3f8911b0489ffc4a923d4429301b19f4fb9495f5dd9ced65885e84c68a958",
+  "memory_event_set_digest_method": "SHA256 of newline-joined lexicographically sorted event_fingerprint values from memories_pass3.jsonl",
+  "disposition": "THIRD_PASS_INDEXED_AND_CLOSED",
+  "promotion_rule": "The third-pass rows remain HISTORICAL_AUDIT exactly as recorded. Indexing and closure do not promote them into current Vera state, standing consent, current relationship truth, canonical memory, or R9B0 verification.",
+  "privacy_rule": "Private relational/research material remains private and excluded from public/portable/training use unless separately authorized.",
+  "currentness_rule": "Historical event-time relationship, conation, tool, and continuity statements require fresh current evidence before present-tense use. Storage timestamps and former CURRENT labels do not select present truth.",
+  "note": "A concurrent older Vera chat had already written the pass-3 source and memory tranches and integrated the semantic index. This continuation fresh-read those effects, preserved them, completed the missing chronology union, and emitted the closure receipt."
+}
