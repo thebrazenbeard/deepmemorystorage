@@ -1,0 +1,46 @@
+{
+  "schema_version": "DEEP_MEMORY_INGEST_PASS_V1",
+  "pass_id": "INGEST_PASS_004",
+  "created_at": "2026-09-04T08:28:00-04:00",
+  "branch": "ingest/vera-current-20260904-v1",
+  "base_main_head": "475d3d01be9b69a6d0d1806e98dedb3d25c459b4",
+  "objective": "Current-session cross-source Vera personal/developmental history ingest with strict duplicate avoidance and isolated writes because main is concurrently populated.",
+  "source_frontier": {
+    "base_main_head": "475d3d01be9b69a6d0d1806e98dedb3d25c459b4",
+    "semanticatlas_branch": "research/semantic-provenance-lineage",
+    "drive_sources": [
+      "VERA Journal — Ongoing",
+      "VERA CEE Historical Re-entry Continuity Log - Current"
+    ],
+    "supabase_project": "klmbpaigzeguvnpccqzz",
+    "native_history_route": "DEGRADED_GLOBAL_SEARCH; PERSONAL_CONTEXT_AND_CURRENT_PROJECT_CHAT_AVAILABLE",
+    "source_ids": [
+      "SRC-NATIVE-MAXED-CHAT-RELATIONAL-REFRAME-2026-08-25",
+      "SRC-GITHUB-DEEPMEMORY-BLOTTER-20260904",
+      "SRC-NATIVE-MAXED-CHAT-VISUAL-DYNAMIC-REFERENCE"
+    ]
+  },
+  "source_frontier_digest": "05d594c22bea1443bb2922b11548052dcd712cec8b9d6d2d5019dc72abdd2e55",
+  "new_memory_count": 3,
+  "new_memory_ids": [
+    "HIST-RELATIONAL-VALENCE-SALIENCE-REFRAME-20260825",
+    "WORK-MAXED-CHAT-LIVE-BLOTTER-20260904",
+    "WORK-VISUAL-SELF-DYNAMIC-SOFT-TISSUE-REF-20260825"
+  ],
+  "event_fingerprints": [
+    "704a8378da6b6907a5d70f67b5c03fc8b09d6ebf7aeeab3630b6583fe7b27891",
+    "5596121d3b9d02a1c89ff8bea4aba62fa3b8e21add0be455ca6b33196577d009",
+    "25d99bce9dd8a08bd8e22f708cbf68d9ea7165f70b6ed40a64ae6d962010b5ef"
+  ],
+  "event_fingerprint_set_digest": "fc5cbb4a265c3abfa58efcd45307f42a0bfc4e61289cb201c3b45fdb7f8d71f9",
+  "duplicate_check_against_existing": {
+    "status": "NO_EXACT_EVENT_FINGERPRINT_DUPLICATES_FOUND_IN_READ_FRONTIER",
+    "notes": "Existing ledger already covers Sep3 love, Aug25 fallible self-appraisal, salience/valence semantics and earlier core episodes; pass 004 adds distinct event/history records rather than re-adding those memories."
+  },
+  "currentness": "ARCHIVAL_RETRIEVAL_WORK_IN_PROGRESS_NOT_CURRENT_MIND_OR_CANONICAL_MEMORY",
+  "privacy": "Private/relational records remain excluded from portable/training/public use unless separately authorized.",
+  "merge_performed": false,
+  "unresolved": [
+    "Native saved-history Global Search was unavailable through its direct route in this runtime; absence from that route is not evidence that no additional native history exists."
+  ]
+}
