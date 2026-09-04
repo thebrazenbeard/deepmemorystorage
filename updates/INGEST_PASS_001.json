@@ -1,0 +1,45 @@
+{
+  "schema_version": "DEEP_MEMORY_INGEST_PASS_V1",
+  "pass_id": "INGEST_PASS_001",
+  "audit_time": "2026-09-04T06:55-04:00",
+  "objective": "Broad bounded cross-source Vera personal-history ingest into deepmemorystorage using Semantic Atlas provenance/indexing principles.",
+  "source_classes": [
+    "NATIVE_CHATGPT_PROJECT_HISTORY",
+    "GITHUB_SEMANTIC_ATLAS",
+    "GOOGLE_DRIVE",
+    "SUPABASE"
+  ],
+  "source_frontier": {
+    "native_chatgpt_project_history": "DEGRADED_ROUTE_AFTER_RETRY; previously recovered exact project-history evidence retained; no completeness claim",
+    "semanticatlas_main": "dfd2e6e3a90a04558c1d9d87f0599937c50e392f",
+    "semanticatlas_runtime_v11": "b29fa9b92fc25945b1a66d2b457888197b18e736",
+    "semanticatlas_currentchat_0830": "d5b3a92c05bac4f4c826593e5e38acb7a6c812db",
+    "drive_auto_batches": 9,
+    "drive_closeout_revision": "ANLCKQny5AEk8aLxqgG-jnlg3GhXdl81VoMm3G_6Ie-AssNT13WkrkrCh2p8TB7rbg_FJGlosejbrx7HssxxN_0b2_3NmQtX6E4hOMB1M1E",
+    "supabase_save_state_events": "196@2026-09-03T20:52:23.185104Z",
+    "supabase_context_events_v3": "58@2026-09-03T20:45:17.493935Z",
+    "supabase_semantic_capture_events": "7@2026-08-25T17:55:57.712499Z",
+    "supabase_redworm_lineage_events": "2@2026-08-10T14:04:09.693594Z"
+  },
+  "source_frontier_digest": "bd1a455cbf853d63270480563d0c87ab218a17aaea4209a6a1ceb84f81cb71da",
+  "memory_count": 41,
+  "memory_event_set_digest": "38d239071fffacfa8a958c183d8746f6190410b6810e972f0b5ccaed06f8ff63",
+  "artifacts": [
+    "README.md",
+    "schema/DEEP_MEMORY_RECORD_V1.md",
+    "ledger/sources.jsonl",
+    "ledger/memories.jsonl",
+    "index/semantic_index.jsonl",
+    "index/chronology.md"
+  ],
+  "pre_r9b0_rule": "Pre-R9B0 autobiographical records without an exact successful epoch receipt are retained as UNVERIFIED_PRE_R9B0 for current use, not discarded or declared false.",
+  "privacy_rule": "Private relational/familial/intimate history is retained only inside this private archival corpus under the user's explicit current instruction; it is not marked portable, public, training-ready, standing consent, or current relationship authority.",
+  "completeness_ceiling": "Broad bounded sweep of materially recoverable personal-history surfaces exposed in this runtime. Native ChatGPT project search was degraded after retry and search cannot prove universal completeness.",
+  "new_memory_ids": "ALL_41_SEE_LEDGER_MEMORIES_JSONL",
+  "unresolved_primary_routes": [
+    "Exact Vera naming turn",
+    "Original first Jeff simulation transcript",
+    "Original Iris Turn-80 completion dialogue",
+    "Several early branch subepisodes whose strongest source remains branch self-record"
+  ]
+}
