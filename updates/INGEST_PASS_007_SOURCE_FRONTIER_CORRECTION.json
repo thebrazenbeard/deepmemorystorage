@@ -1,0 +1,49 @@
+{
+  "schema_version": "DEEP_MEMORY_RECEIPT_CORRECTION_V1",
+  "correction_id": "INGEST_PASS_007_SOURCE_FRONTIER_CORRECTION",
+  "target_receipt": "updates/INGEST_PASS_007.json",
+  "target_receipt_blob_sha": "76248e32b7c2466f7cd6b9feea6014e579087daf",
+  "correction_time": "2026-09-04T11:43:00-04:00",
+  "correction_class": "DETERMINISTIC_PROVENANCE_METADATA_CORRECTION",
+  "preserve_original_receipt": true,
+  "historical_memory_content_changed": false,
+  "corrections": [
+    {
+      "field": "external_discovery_frontier.empathy_reactive_foundation_head_observed",
+      "recorded_value": "f48453d0824c539a8527b95939c6e0720aebebb4",
+      "recorded_value_was": "TREE_SHA",
+      "correct_branch_commit_sha": "45fac30f8ad55c8283a5a3447d6ad2d2a99fd60b",
+      "tree_sha": "f48453d0824c539a8527b95939c6e0720aebebb4"
+    },
+    {
+      "field": "external_discovery_frontier.conations_head_observed",
+      "recorded_value": "727a75385fe16128f58d331507d41056e84ea22d",
+      "recorded_value_was": "TREE_SHA",
+      "correct_branch_commit_sha": "01c4bf105d1b4471342a0fdb5bbc15b468f1f745",
+      "tree_sha": "727a75385fe16128f58d331507d41056e84ea22d"
+    },
+    {
+      "field": "external_discovery_frontier.selfimage_canon_head_observed",
+      "recorded_value": "6ea20bf086ca8413f2ac213ae777708d81bf977d",
+      "recorded_value_was": "TREE_SHA",
+      "correct_branch_commit_sha": "255b4f9fa7ea9d6750b447f3cdfc8a699e8995ed",
+      "tree_sha": "6ea20bf086ca8413f2ac213ae777708d81bf977d"
+    },
+    {
+      "field": "external_discovery_frontier.sexuality_brigit_evacuation_head_observed",
+      "recorded_value": "e18a24785acc7234b8bacd8139884d9e7282e3a3",
+      "recorded_value_was": "TREE_SHA",
+      "correct_branch_commit_sha": "9043ef2b62b70aabbcc44b30e2edb6e98fa32bd0",
+      "tree_sha": "e18a24785acc7234b8bacd8139884d9e7282e3a3"
+    },
+    {
+      "field": "external_discovery_frontier.brigit_unbound_head_observed",
+      "recorded_value": "86844a14c84acec311a3ceeee3f50699a36a4710",
+      "recorded_value_was": "TREE_SHA",
+      "correct_branch_commit_sha": "f12cc01e58facd5f3c46b763084c485cb9043608",
+      "tree_sha": "86844a14c84acec311a3ceeee3f50699a36a4710"
+    }
+  ],
+  "effect_boundary": "This correction changes only provenance metadata labels. It does not alter any historical memory record, event fingerprint, currentness rule, privacy rule, authority, or memory class.",
+  "pass8_materiality": "The correction is a material source-frontier refinement and therefore contributes to Pass 008 being nonconvergent relative to Pass 007."
+}
