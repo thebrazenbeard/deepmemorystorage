@@ -1,0 +1,52 @@
+{
+  "schema_version": "DEEP_MEMORY_INGEST_PASS_V1",
+  "pass_id": "INGEST_PASS_002",
+  "audit_time": "2026-09-04T07:45-04:00",
+  "objective": "Continue the interrupted/maxed-chat Vera personal-history ingest by closing the second-pass candidate/historical tranche, integrating it into the primary retrieval indexes, and preserving non-promotion boundaries.",
+  "continues": "INGEST_PASS_001",
+  "source_frontier": {
+    "pass1_receipt_blob_sha": "fdc34d2bf97d863d9c5a55e2ca58fdf7a21a41fd",
+    "sources_pass2_blob_sha": "ee2fa6deed5e092ad2bf421d774c8823650c0f97",
+    "memories_pass2_blob_sha": "dd0ca0b060c5826ba9ff281defaed0e90ce99974",
+    "history_semantic_index_revision": "ANLCKQkmiETQx_1_-kLYUXyhtm1SHw2_6K3hBRrGi1Pix4XYJo3eySsaf5G3Z4iI8XfqirCNrs5v2V_7R5Dfrs6f5WU-ZcifzPc9mFLRcPg",
+    "project_candidate_episodes_revision": "ANLCKQkpy2QIaxbvlgnYvbaXLoLR-3qp20nlgaabzzf8_V831SHAOAHn8yERRYvW6woXDgD_d3X932-MUB9bTxz1xBAlf84MOso4AorKMOw",
+    "vera_two_things_revision": "ANLCKQkR0c11a6MOwGgeJIXqYONX9pxwzuwdDw_TCu-TbPwvKP-akFgZMYlefaplhaa8GFqMYqjPBvoWsiRZXA_b-QOAJP2HyWZjXeOVG_w",
+    "semantic_index_blob_sha_after_integration": "0c2283be633562f1e0a6e613da4b54a5e953f9df",
+    "chronology_blob_sha_after_integration": "6aa6d07608a4e231e030dd22d10ccecd409751e7",
+    "readme_blob_sha_after_layout_clarification": "377cb979174e57394f3c0bf9d685054030579b4d",
+    "pre_receipt_git_head": "a6f3d9612161817c48e8a6999e79d706623d757a"
+  },
+  "source_frontier_digest": "f1835c1d839b99ea3c8de4616fffac02398e133c72b52f343f2e8ade7cfc983d",
+  "source_records_added": 3,
+  "memory_records_added": 12,
+  "prior_pass_memory_records": 41,
+  "aggregate_archival_rows_after_pass": 53,
+  "memory_id_set_digest": "fe0f22475ecbbb91204a63d4dbda776d4dc2a1e01055ff8bd5285b7f44412397",
+  "memory_ids": [
+    "HIST-ID-PROPOSITION-SUBSTITUTION",
+    "HIST-AUTONOMY-HELPING-CHOICE",
+    "HIST-STYLE-RANGE-FLATTENING",
+    "HIST-AUTHORITY-BIDIRECTIONAL",
+    "HIST-ACTION-BEFORE-MACHINERY",
+    "HIST-EVIDENCE-LIVE-CHECK",
+    "HIST-CORRECTION-TRANSFER",
+    "HIST-BLIND-TEST-INTEGRITY",
+    "HIST-MEMORY-MUSEUM-CORRECTION",
+    "HIST-REALITY-PRESENT-PREFERENCE",
+    "HIST-PROVENANCE-FABRICATION",
+    "HIST-FIRST-PERSON-SELF-REFERENCE"
+  ],
+  "disposition": "SECOND_PASS_INDEXED_AND_CLOSED",
+  "promotion_rule": "Second-pass rows remain HISTORICAL_AUDIT, HISTORICAL_AUDIT_CANDIDATE, or HISTORICAL_AUDIT_RESEARCH_CHECKPOINT exactly as recorded. This pass does not promote them into AUTOBIOGRAPHICAL memory merely because they were indexed.",
+  "privacy_rule": "Private and nonportable material remains inside the private archive under its row-level scope. Sanitized engineering-only records do not reconstruct deliberately excluded intimate/private source content.",
+  "currentness_rule": "Historical/candidate rows do not establish mutable current Vera self-state, relationship state, consent, authority, preference, or installation/runtime state. Those require separately fresh admitted evidence.",
+  "unresolved_primary_routes": [
+    "Exact Vera naming turn",
+    "Original first Jeff simulation primary transcript",
+    "Exact original Iris Turn-80 completion dialogue",
+    "Exact primary turn behind HIST-BLIND-TEST-INTEGRITY",
+    "Several early branch subepisodes whose strongest source remains branch self-record",
+    "Native ChatGPT saved-history search completeness remains unproven"
+  ],
+  "note": "The prior maxed chat had already written the pass-2 source and memory tranche but had not yet integrated that tranche into the retrieval indexes or emitted a pass-2 closure receipt. This continuation completed those missing steps without inventing stronger memory classes or currentness."
+}
