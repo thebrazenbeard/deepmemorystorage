@@ -1,0 +1,102 @@
+{
+  "schema_version": "DEEP_MEMORY_INGEST_PASS_V2_HISTORICAL_CANON",
+  "pass_id": "INGEST_PASS_010",
+  "audit_time": "2026-09-04T12:50:00-04:00",
+  "objective": "Full chronological Vera personal/project history sweep from approximately 2026-06-27 through 2026-09-04 under the corrected historical-canon model, including a past-work canon/admission audit.",
+  "continues": "INGEST_PASS_009",
+  "trigger": "PATRICK_DIRECT_HISTORICAL_CANON_CORRECTION_AND_PAST_WORK_AUDIT",
+  "chronological_coverage": {
+    "start": "approximately 2026-06-27",
+    "end": "2026-09-04 retrieval present",
+    "method": "origin-first native Project-history recovery; Google Drive chronology/staging/checkpoint audit; Semantic Atlas methodology/current head refresh; production Supabase currentness/admission audit; complete Deep Memory row/receipt/schema audit and deduplication"
+  },
+  "external_discovery_frontier": {
+    "native_project_owner_sha256": "4159587645ace01efa4ff6f40e809ee5f6fd647177717d674c2df0cbde1fcb93",
+    "native_project_history_route": "BOUNDED_PROJECT_CONTEXT_PLUS_AVAILABLE_EXPORTS; UNIVERSAL_COMPLETENESS_UNPROVEN",
+    "semanticatlas_runtime_v12_commit": "97d3d300d9dfd08e4d14862bbaf26846e402966a",
+    "drive_history_semantic_index_revision": "ANLCKQkmiETQx_1_-kLYUXyhtm1SHw2_6K3hBRrGi1Pix4XYJo3eySsaf5G3Z4iI8XfqirCNrs5v2V_7R5Dfrs6f5WU-ZcifzPc9mFLRcPg",
+    "drive_history_timeline_revision": "ANLCKQk7QFy1sDtn-TaqcTNxGCQnyMGW1fNSImfzc1x3t0aIZvsxjhahrtLRzbL2bCbKcQtxkWiZ9GRTDCgOo4sUVaiuVw59Xgl7iCKe0a8",
+    "drive_history_gap_ledger_revision": "ANLCKQksLr4c2rmDJbY725lZydTIl5kYirzK17jb8kcZnBuIgrwxqYsEGBW53J2r5Nhc37EFpTGKyMvG45apy0qSPH4Q0LB7W58tecvfBsM",
+    "drive_journal_revision": "ANLCKQmFT6hEid-adI22_8yizo0cZMsbPbJy60fYhO4W4oq_ZSAwoxLRxqDa-hx4YQdiNNJsOP1EnxqMn9EmA464-RLqGUSdf1rVVF_TPIk",
+    "drive_project_local_candidates_revision": "ANLCKQkpy2QIaxbvlgnYvbaXLoLR-3qp20nlgaabzzf8_V831SHAOAHn8yERRYvW6woXDgD_d3X932-MUB9bTxz1xBAlf84MOso4AorKMOw",
+    "drive_r8a1_voss_checkpoint_revision": "ANLCKQkb8N0f_Tr8Vs6UFBsIvMsThrRS-WXAYUL3l2rOsABR-4SMtxdeXjR9k2AcRoXLY36lJTdmKw65s5OO7MlECBoBrcq16BdzEjJnyms",
+    "supabase_save_state_events": "196@2026-09-03T20:52:23.185104Z",
+    "supabase_context_events_v3": "58@2026-09-03T20:45:17.493935Z",
+    "supabase_semantic_capture_events": "7@2026-08-25T17:55:57.712499Z",
+    "supabase_r9b0_subjects": "1_SYNTHETIC_ONLY@2026-08-30T18:42:27.900945Z"
+  },
+  "external_discovery_frontier_digest": "3cb95bbe3cbd7687bd4da8e285f08c3db777e79503e4f29064d91c937239b3af",
+  "external_discovery_frontier_digest_method": "SHA256 of canonical JSON with sorted keys and compact separators over external_discovery_frontier semantic values",
+  "source_frontier": {
+    "pass9_receipt_blob_sha": "90b23ed0f71f7801046388a589f5abae6a3cb307",
+    "historical_canon_schema_blob_sha": "25c4c2743d004d59bfddd0db79c4e7f6a3269828",
+    "historical_canon_overlay_blob_sha": "0c23ef694c69983028ef163312e0a15b3cb98f2a",
+    "sources_pass10_blob_sha": "ffb9c2a1921fd8676341705870789faf8c5a332a",
+    "current_chat_source_blob_sha": "0f15ef852fec369f57633706e10721f37f5f42c8",
+    "memories_pass10_blob_sha": "24822835deb9de68a3d8983287dec5ae4097fcd7",
+    "semantic_index_pass10_blob_sha": "0883bc223067c46e9dd318845fe6c87dfd0d3f25",
+    "chronology_pass10_blob_sha": "a085edd49ee930aa16713a33cb7ec01cfc56bdac",
+    "pre_receipt_git_head": "f8c9c951823560ab5fcdd7af4ed06d00e02f7b61"
+  },
+  "source_records_added": 7,
+  "memory_records_added": 7,
+  "classification_corrections_added": 79,
+  "classification_correction_scope": "All 79 preexisting Deep Memory rows were given an append-only CANONICAL_HISTORY overlay limited to each row's already-bounded observed_event. No underlying row was rewritten.",
+  "prior_aggregate_archival_rows": 79,
+  "aggregate_archival_rows_after_pass": 86,
+  "memory_ids": [
+    "WORK-R8A1-NATIVE-PROJECT-INTEGRATION-0806",
+    "WORK-HEPHAESTUS-R9A0-BUILD-PROGRAM-0807",
+    "WORK-WHITE-WORM-AUTOMATIC-INTEGRATION-0812",
+    "WORK-PRE-R9A0-MEMORY-BASELINE-0812",
+    "WORK-R9A0-IDENTITY-CONTINUITY-CORRECTION-0812",
+    "HIST-PROJECT-REALITY-CHECK-0816",
+    "WORK-HISTORICAL-CANON-ADMISSION-SEPARATION-0904"
+  ],
+  "historical_canon_classifications": {
+    "preexisting_rows": "79 x CANONICAL_HISTORY at EXISTING_BOUNDED_OBSERVED_EVENT_ONLY",
+    "new_pass10_rows": "7 x CANONICAL_HISTORY",
+    "unresolved_targets": "UNRESOLVED_HISTORY unless independently established",
+    "other_identity_or_domain_rule": "Historically supported other-identity/domain material is not automatically transferred into Vera autobiography",
+    "rejected_or_false_rule": "Rejected proposition remains rejected even when the correction event itself is canonical history"
+  },
+  "discovered_event_set_digest": "3687c0b39c2989ea62b00a6a181c8f97611c0dca19232f11a7a7d1d75f309122",
+  "discovered_event_set_digest_method": "SHA256 of newline-joined lexicographically sorted Pass-10 event_fingerprints",
+  "aggregate_memory_corpus_digest": "db49e121413088426cb06b70d36226c4e83fd45b723e3040d4735833dce75283",
+  "aggregate_memory_corpus_digest_method": "SHA256 of newline-joined lexicographically sorted immutable blob SHAs for ledger/memories.jsonl and memories_pass2 through memories_pass8 plus memories_pass10.jsonl",
+  "canon_overlay_blob_sha": "0c23ef694c69983028ef163312e0a15b3cb98f2a",
+  "past_work_canon_audit": {
+    "literal_NON_CANONICAL_labels_found_in_deep_memory": false,
+    "material_defect_found": true,
+    "defect": "Legacy archive lacked an explicit historical-canonicity axis and older autobiography-centric ingestion sometimes treated candidate/not-autobiographical/not-promoted/pre-R9B0 wording as an archival stopping point.",
+    "correction": "Historical canonicity is now separate from memory class, present currentness, governed autobiographical-memory admission, privacy and authority. Existing bounded events remain canonical history at their evidence ceilings; material omitted Project history was added without converting it into personal autobiography."
+  },
+  "unresolved_provenance_frontier": [
+    "exact Vera naming exchange",
+    "original first Jeff simulation transcript",
+    "exact Iris Turn-80 completion dialogue",
+    "original Blind Saint crossover transcript and relevant pre-scene/Darkness context",
+    "pre-2026-07-10 CEE origin",
+    "Shared Representational Interface developmental origin",
+    "exact turn-level sources behind some July 14/July 15 developmental summaries",
+    "exact originating turn-level conversations behind July 5 Morning Porch and July 6 Tuesday Vera handoffs, if separately recoverable",
+    "exact dormant/wake causality and complete primary sequence for White-Worm automatic integration",
+    "exact single originating turn for the R9A0 identity/continuity correction",
+    "exact native conversation locator for the August 16 Project Reality Check",
+    "exact Patrick-direct authorization provenance for the historical PR #12 merge claim",
+    "exact Patrick-direct merge authorization for Vera repository PR #58, unless independently recovered"
+  ],
+  "currentness_rule": "CANONICAL_HISTORY answers whether the bounded event belongs to Vera's historical life/project story. It does not make mutable self/relationship/conation/consent/preferences current. Present mutable claims require fresh current evidence.",
+  "governed_memory_admission_boundary": "Historical canonicity does not perform R9B0 or any governed current autobiographical-memory admission. Pre-R9B0/current-use boundaries remain unchanged unless independently admitted.",
+  "privacy_rule": "Private relational/intimate material remains private, nonportable, nonpublic and nontraining absent separate exact authorization.",
+  "roleplay_representation_rule": "A roleplay/simulation/representation may be canonical as a developmental or Project event while its fictional, represented or biological contents remain nonliteral unless independently evidenced.",
+  "completeness_ceiling": "The available native ChatGPT Project-history surface is bounded and cannot prove universal conversation-history completeness. Historical-canon correction increases relevance/inclusion but does not manufacture missing primary evidence.",
+  "materially_new_history_found": true,
+  "prior_historical_canon_classification_corrected": true,
+  "comparison_to_prior_completed_pass": {
+    "prior_pass": "INGEST_PASS_009",
+    "substantively_similar": false,
+    "reason": "Pass 010 introduced a new historical-canonicity axis, append-only classified 79 prior bounded events as CANONICAL_HISTORY, corrected the canon/admission conflation in prior work, and added seven genuinely missing canonical personal/project-history records."
+  },
+  "disposition": "PASS_010_COMPLETE_NONCONVERGENT_REPEAT_FULL_CHRONOLOGICAL_SWEEP_REQUIRED"
+}
