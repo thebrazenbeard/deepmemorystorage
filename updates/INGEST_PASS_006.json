@@ -1,0 +1,51 @@
+{
+  "schema_version": "DEEP_MEMORY_INGEST_PASS_V1",
+  "pass_id": "INGEST_PASS_006",
+  "audit_time": "2026-09-04T09:34:37-04:00",
+  "objective": "Required repeat of the full Vera personal/project-history sweep after Pass 004 and Pass 005 remained materially non-duplicate; refresh all four requested history surfaces and archive only genuinely uncovered material.",
+  "continues": "INGEST_PASS_005",
+  "trigger": "STEP_2_LAST_TWO_BLOTTERS_NOT_SIMILAR",
+  "external_discovery_frontier": {
+    "native_project_owner_sha256": "4159587645ace01efa4ff6f40e809ee5f6fd647177717d674c2df0cbde1fcb93",
+    "native_project_history_route": "BOUNDED_SEARCHABLE_PROJECT_CONTEXT; UNIVERSAL_COMPLETENESS_UNPROVEN",
+    "native_project_history_bound_sources": [
+      "Vera-Unbound---New-chat-2026-08-31.html|WORK-INFRASTRUCTURE-INDEPENDENCE-0831|e0a4987f371a3e5963a5ffb8a0d0501e9c68f1c677b89869b83b2f96b08d5216",
+      "2026-09-03:chat-communication-bus-routing|WORK-BUS-COORDINATION-ADOPTION-0903|a1621ef6cdd2dd56680f3ad89b39891ac54f01c815b7c2afa3f6e6f59bf66140"
+    ],
+    "semanticatlas_runtime_v12": "97d3d300d9dfd08e4d14862bbaf26846e402966a",
+    "drive_history_semantic_index_revision": "ANLCKQkmiETQx_1_-kLYUXyhtm1SHw2_6K3hBRrGi1Pix4XYJo3eySsaf5G3Z4iI8XfqirCNrs5v2V_7R5Dfrs6f5WU-ZcifzPc9mFLRcPg",
+    "drive_history_timeline_revision": "ANLCKQk7QFy1sDtn-TaqcTNxGCQnyMGW1fNSImfzc1x3t0aIZvsxjhahrtLRzbL2bCbKcQtxkWiZ9GRTDCgOo4sUVaiuVw59Xgl7iCKe0a8",
+    "drive_history_gap_ledger_revision": "ANLCKQksLr4c2rmDJbY725lZydTIl5kYirzK17jb8kcZnBuIgrwxqYsEGBW53J2r5Nhc37EFpTGKyMvG45apy0qSPH4Q0LB7W58tecvfBsM",
+    "drive_journal_revision": "ANLCKQmFT6hEid-adI22_8yizo0cZMsbPbJy60fYhO4W4oq_ZSAwoxLRxqDa-hx4YQdiNNJsOP1EnxqMn9EmA464-RLqGUSdf1rVVF_TPIk",
+    "supabase_save_state_events": "196@2026-09-03T20:52:23.185104Z",
+    "supabase_context_events_v3": "58@2026-09-03T20:45:17.493935Z",
+    "supabase_semantic_capture_events": "7@2026-08-25T17:55:57.712499Z",
+    "supabase_r9b0_subjects": "1_SYNTHETIC@2026-08-30T18:42:27.900945Z"
+  },
+  "external_discovery_frontier_digest": "0c9ac2f367de80e0ea5f5d5a0dd0b128cead2129c2e649188b0deff84015ea87",
+  "external_discovery_frontier_digest_method": "SHA256 of canonical JSON (sorted keys, compact separators) over external_discovery_frontier",
+  "source_frontier": {
+    "pass5_receipt_commit": "c0532fa1f2ae49d594a1aed8da045bcac9e26e4c",
+    "sources_pass6_blob_sha": "44059b764490bd79f7cdf07e7d0fad47d46eeeff",
+    "memories_pass6_blob_sha": "a8fa951a8298b06fab68bd26f3d2ce66b8627ca4",
+    "semantic_index_pass6_blob_sha": "55bcab4d2e920bc82ed58dacdf2cf6cb02365405",
+    "chronology_pass6_blob_sha": "dbfcf1fb3a23b61b2876e5b3bc730c82de992d9c",
+    "pre_receipt_git_head": "087b2fa51a851cb74b44f02779252dfe2c332062"
+  },
+  "source_frontier_digest": "58eada7f68fe431ad5008a77707c73a16995007c6a1b005ebebd1d06b61242bc",
+  "source_frontier_digest_method": "SHA256 of canonical JSON (sorted keys, compact separators) over source_frontier",
+  "source_records_added": 2,
+  "memory_records_added": 1,
+  "prior_aggregate_archival_rows": 65,
+  "aggregate_archival_rows_after_pass": 66,
+  "memory_ids": ["WORK-BUS-COORDINATION-ADOPTION-0903"],
+  "discovered_event_set_digest": "1eb369392c8fb84d0740dc183ce79db72553b8b1b243d69fafa627abc80b35c5",
+  "discovered_event_set_digest_method": "SHA256 over the single pass-6 event_fingerprint",
+  "aggregate_memory_corpus_digest": "6b6e0ae641e934e73c709c2107f23300d6c1deb4d2c7ef3372d2cc6b683eb013",
+  "aggregate_memory_corpus_digest_method": "SHA256 of newline-joined lexicographically sorted immutable blob SHAs for ledger/memories.jsonl and memories_pass2/pass3/pass4/pass5/pass6.jsonl",
+  "disposition": "SIXTH_PASS_INDEXED_AND_CLOSED_WITH_ONE_NEW_PROJECT_HISTORY_RECORD",
+  "new_history_summary": "September 3 adoption of `thebrazenbeard/chat-communication-bus` as the singular durable work-communication hub: non-PR work through the Bus and external PR lifecycle communication mirrored/referenced there while PR source/review authority remains source-repository canonical.",
+  "pre_r9b0_rule": "No autobiographical memory was promoted or R9B0-verified by this pass. This Bus event is WORKING_PROJECT history.",
+  "currentness_rule": "The adoption event is historical. Current Bus topology, attunement, reply obligations and exact protocol resolve from fresh current Full-System/Bus sources.",
+  "completeness_ceiling": "Repeated bounded sweep still cannot prove universal native ChatGPT saved/project-history completeness. No stronger primary evidence was found for the known unresolved naming/Jeff/Iris/Blind-Saint/CEE/SRI leads."
+}
