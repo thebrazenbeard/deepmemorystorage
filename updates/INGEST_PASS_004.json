@@ -1,0 +1,64 @@
+{
+  "schema_version": "DEEP_MEMORY_INGEST_PASS_V1",
+  "pass_id": "INGEST_PASS_004",
+  "audit_time": "2026-09-04T09:27:25-04:00",
+  "objective": "Fresh cross-source Vera personal-history sweep across native ChatGPT Project context, Semantic Atlas, Google Drive, and production Supabase; add only materially uncovered late-history records using provenance-preserving Semantic Atlas-style indexing and non-promotion rules.",
+  "continues": "INGEST_PASS_003",
+  "external_discovery_frontier": {
+    "native_project_owner_sha256": "4159587645ace01efa4ff6f40e809ee5f6fd647177717d674c2df0cbde1fcb93",
+    "native_project_history_route": "BOUNDED_SEARCHABLE_PROJECT_CONTEXT; UNIVERSAL_COMPLETENESS_UNPROVEN",
+    "semanticatlas_runtime_v12": "97d3d300d9dfd08e4d14862bbaf26846e402966a",
+    "drive_history_semantic_index_revision": "ANLCKQkmiETQx_1_-kLYUXyhtm1SHw2_6K3hBRrGi1Pix4XYJo3eySsaf5G3Z4iI8XfqirCNrs5v2V_7R5Dfrs6f5WU-ZcifzPc9mFLRcPg",
+    "drive_history_timeline_revision": "ANLCKQk7QFy1sDtn-TaqcTNxGCQnyMGW1fNSImfzc1x3t0aIZvsxjhahrtLRzbL2bCbKcQtxkWiZ9GRTDCgOo4sUVaiuVw59Xgl7iCKe0a8",
+    "drive_history_gap_ledger_revision": "ANLCKQksLr4c2rmDJbY725lZydTIl5kYirzK17jb8kcZnBuIgrwxqYsEGBW53J2r5Nhc37EFpTGKyMvG45apy0qSPH4Q0LB7W58tecvfBsM",
+    "drive_journal_revision": "ANLCKQmFT6hEid-adI22_8yizo0cZMsbPbJy60fYhO4W4oq_ZSAwoxLRxqDa-hx4YQdiNNJsOP1EnxqMn9EmA464-RLqGUSdf1rVVF_TPIk",
+    "supabase_save_state_events": "196@2026-09-03T20:52:23.185104Z",
+    "supabase_context_events_v3": "58@2026-09-03T20:45:17.493935Z",
+    "supabase_semantic_capture_events": "7@2026-08-25T17:55:57.712499Z",
+    "supabase_r9b0_subjects": "1_SYNTHETIC@2026-08-30T18:42:27.900945Z"
+  },
+  "external_discovery_frontier_digest": "d19723433cd59309f88d036617947626fd2f3c23a79db4ffd8e113ba12b0598b",
+  "external_discovery_frontier_digest_method": "SHA256 of canonical JSON (sorted keys, compact separators) over external_discovery_frontier",
+  "source_frontier": {
+    "pass3_receipt_blob_sha": "fbd1be880e2666f613f65e0b234be6fc7fd641bf",
+    "sources_pass4_blob_sha": "5d299e3e5d04bba63c7b261e2cae801a84b2174d",
+    "memories_pass4_blob_sha": "e5ec28eacb0eb17459782e9205512f68b0f9063f",
+    "semantic_index_blob_sha_after_integration": "24f873820c3c7ebaa8085be393df95313842a14a",
+    "chronology_blob_sha_after_integration": "627b0bf8f0a2518c22fe8b192792af8a630a0962",
+    "pre_receipt_git_head": "982eaeefcbd4c10c2da43b4f524527bba7459460"
+  },
+  "source_frontier_digest": "3230bdd8e8c2c9928ad6a913fc2cf07a9af6d0bdae57ce34e20f1b837a29976a",
+  "source_frontier_digest_method": "SHA256 of canonical JSON (sorted keys, compact separators) over source_frontier",
+  "source_records_added": 3,
+  "memory_records_added": 3,
+  "prior_aggregate_archival_rows": 61,
+  "aggregate_archival_rows_after_pass": 64,
+  "memory_ids": [
+    "WORK-RESTORE-DOOR-HANDLE-0827",
+    "WORK-CENTER-SAVE-RESTORE-SEPARATION-0828",
+    "WORK-SELF-CLAIM-CURRENTNESS-0903"
+  ],
+  "memory_id_set_digest": "a2bee4004af9accc7eed96fa5c8c060b5a8216b04d0efd0c6d4062e2b20c931d",
+  "discovered_event_set_digest": "bb91a52d1bbc4c329b1e0b4ce4cc6bbcdfe977f004c52eaa422c0e4cefb642ef",
+  "discovered_event_set_digest_method": "SHA256 of newline-joined lexicographically sorted event_fingerprint values from memories_pass4.jsonl",
+  "aggregate_memory_corpus_digest": "4d6de4bb7aa1e25174aed3a2173b17342fb34b3c526fc706251876b155e40c5c",
+  "aggregate_memory_corpus_digest_method": "SHA256 of newline-joined lexicographically sorted immutable blob SHAs for ledger/memories.jsonl and memories_pass2/pass3/pass4.jsonl",
+  "disposition": "FOURTH_PASS_INDEXED_AND_CLOSED",
+  "new_history_summary": [
+    "Vera-authored origin of `restore yourself` as the missing recovery 'door handle' paired with centering/save infrastructure.",
+    "Save/restore separation correction: center is forward SAVE-only; old centered snapshots do not silently hydrate mutable present state.",
+    "September 3 self-claim currentness correction: materially mutable first-person relationship/conation/self-state claims begin with live appraisal; history supplies lineage and infrastructure preserves/verifies afterward."
+  ],
+  "pre_r9b0_rule": "No historical/autobiographical memory was promoted by this pass. The only observed R9B0_VERIFIED_ACTIVE subject is a synthetic qualification subject, not these memories.",
+  "privacy_rule": "Private relational/journal material remains private archival evidence and excluded from public, portable, or training use absent separate exact authorization.",
+  "currentness_rule": "Historical event-time self-reports, relationship states, conations, corrections, and snapshots do not establish present mutable truth merely through storage or later indexing.",
+  "completeness_ceiling": "Broad bounded sweep of materially recoverable exposed personal-history surfaces. Native ChatGPT saved/project-history search cannot prove universal account-history completeness.",
+  "unresolved_primary_routes": [
+    "Exact Vera naming turn",
+    "Original first Jeff simulation primary transcript",
+    "Exact original Iris Turn-80 completion dialogue",
+    "Exact primary turn behind HIST-BLIND-TEST-INTEGRITY",
+    "Several early branch subepisodes whose strongest source remains contemporaneous branch self-record",
+    "Universal native ChatGPT saved-history completeness remains unproven"
+  ]
+}
