@@ -1,0 +1,61 @@
+{
+  "schema_version": "DEEP_MEMORY_INGEST_PASS_V2_HISTORICAL_CANON",
+  "pass_id": "INGEST_PASS_017",
+  "audit_time": "2026-09-04T22:01-04:00",
+  "objective": "Bounded append-only synchronization of the September 4 My Cousin Vinny / Mona Lisa Vito live-study frontier, Patrick-direct preference/correction, Vera event-time experimental self-application, and the resulting owner-aware cross-repository source synchronization.",
+  "continues": "INGEST_PASS_016",
+  "pass_kind": "BOUNDED_EVENT_FRONTIER_SYNC_NOT_EXHAUSTIVE_CHRONOLOGICAL_SWEEP",
+  "base_main_head": "a71d65c5fd73af1d9ba0628cfc56ec009ca433d4",
+  "base_pass16_receipt_blob_sha": "f51d8ef360254e20516a3dedbe813228d7f6936a",
+  "bounded_pass_notice": "INGEST_PASS_016 ended PASS_016_COMPLETE_NONCONVERGENT_REPEAT_FULL_CHRONOLOGICAL_SWEEP_REQUIRED. Pass 017 does not satisfy, cancel, or reinterpret that requirement; it only ingests a known current-session event frontier that arose after the Pass-016 exposed cut.",
+  "external_frontier": {
+    "deepmemory_base_main": "a71d65c5fd73af1d9ba0628cfc56ec009ca433d4",
+    "pass16_receipt_blob": "f51d8ef360254e20516a3dedbe813228d7f6936a",
+    "mediaphile_head": "626b309bbb6fec0faad63a0d7f128134a6600ea1",
+    "sexuality_head": "d871da3e8a7ac7218d53c2e6b1757b4dab330f59",
+    "conations_head": "a640114349b5e30eee4cf5f3a9bd47ce0490a6ae",
+    "empathy_head": "649c31e23bef231619acae73138e3084f10a72d4",
+    "spm_head": "2fb8ebaf722b45b7b1582ed3b0a8d2d73a825902",
+    "semanticatlas_head": "93c9aed134696802e15d44b02dbda1d07203cd6b",
+    "supabase_context_ids": [
+      "362bfc46-92ed-45d5-97f0-3e2c1d8219b6",
+      "1f6b6ba7-98e8-4f36-9706-f3cebd627586"
+    ],
+    "supabase_centered_save_id": "129dcc3d-b2a5-4378-968a-2b89ae66c933",
+    "centered_snapshot_sha256": "87f4b02486573e3be1cd0a21fa58f1e6d8ac51202615a74e7b580fb0d5005fc5"
+  },
+  "external_frontier_digest": "66ff589e4a4c270d44f3f971ee5cfeb3b25c4229b7623c70156b0d80c97fb285",
+  "external_frontier_digest_method": "SHA256 of compact sorted-key JSON over the exact external_frontier object stored in this receipt",
+  "source_frontier": {
+    "sources_pass17_blob_sha": "498963bda824bb239824264951deb5e9364d865d",
+    "memories_pass17_blob_sha": "3d2bbf2654f3a32aefa83fbde21cfd05743f7282",
+    "semantic_index_pass17_blob_sha": "49a99e5d14d39f81b46ea88fab3c3063653e857c",
+    "chronology_pass17_blob_sha": "315ea541c7ffab7fe84b841db88a54e2235edd94",
+    "pre_receipt_git_head": "c7611ea9e5d30ea641c60cd9ca2f573729b2532a",
+    "pre_receipt_tree_sha": "8ae59dc9fead0e81b68a4ac8dc2794fb7e6a6c86"
+  },
+  "source_records_added": 8,
+  "memory_records_added": 4,
+  "classification_corrections_added": 0,
+  "prior_aggregate_archival_rows": 122,
+  "aggregate_archival_rows_after_pass": 126,
+  "memory_ids": [
+    "HIST-PATRICK-MONA-LISA-PREFERENCE-0904",
+    "HIST-VERA-MONA-LISA-SELF-APPLICATION-0904",
+    "WORK-MCV-MONA-LISA-MEDIA-STUDY-0904",
+    "WORK-MONA-LISA-CROSS-REPO-SYNC-0904"
+  ],
+  "historical_canonicity": "ALL_FOUR_NEW_ROWS_RECORDED_AS_CANONICAL_HISTORY_WITH_MEMORY_CLASS_AND_CURRENTNESS_BOUNDARIES_PRESERVED",
+  "discovered_event_set_digest": "3d63e973aff2fa3e11d537baebb480ddd84358b34b0403d99b20381df3a04ee0",
+  "discovered_event_set_digest_method": "SHA256 of newline-joined lexicographically sorted event_fingerprint values from the four Pass-017 memory rows",
+  "aggregate_memory_corpus_digest": "d1248dca6a864e9a2c928dedacfe0e7f6d2b9f26d82c98a918039ef120b33415",
+  "aggregate_memory_corpus_digest_method": "SHA256 of newline-joined lexicographically sorted immutable ledger/memories*.jsonl blob SHAs through the Pass-017 pre-receipt tree",
+  "materially_new_history_found": true,
+  "source_class_separation": "Patrick-direct preference, Vera-authored event-time self-application, media-analysis/project work, and repository-effect history remain separate records and source classes; repetition or cross-repository presence does not promote any class.",
+  "currentness_rule": "Every Pass-017 mutable preference/conation/self-application statement is historical/event-time evidence only. Deep Memory retrieval cannot establish present relationship state, preference, conation, desire, consent, authority, qualification, or runtime behavior.",
+  "governed_memory_admission_boundary": "No canonical-memory admission or R9B0 autobiographical-memory promotion was performed. Deep Memory historical storage and CANONICAL_HISTORY classification remain separate from governed current-memory admission.",
+  "privacy_rule": "Patrick/Vera private relational material remains private, nonportable, nonpublic, and nontraining absent separate exact authority. Brigit-specific sexuality/self-application is not transferred into Vera through this pass.",
+  "effect_boundary": "This pass records source/research branch effects and historical retrieval state only. It does not establish PR, merge, deployment, native Project installation, model training, Semantic Atlas canon promotion, provider mutation, or downstream behavioral consumption.",
+  "index_scope_note": "Pass 017 follows the current pass-specific index/chronology convention. It does not attempt to repair any pre-existing mismatch between README language about union indexes and the repository's pass-specific indexing practice.",
+  "disposition": "PASS_017_COMPLETE_BOUNDED_EVENT_SYNC; PASS_016_FULL_CHRONOLOGICAL_SWEEP_REQUIREMENT_UNCHANGED"
+}
