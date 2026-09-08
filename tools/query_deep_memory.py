@@ -14,7 +14,7 @@ import json
 import sys
 from typing import Any
 
-from deep_memory_catalog import load_union
+from deep_memory_catalog import load_union, normalized_record, row_source_ids
 
 RESULT_SCHEMA = "VERA_DEEP_MEMORY_EVIDENCE_RESULT_V1"
 RESULT_SEMANTICS = "HISTORICAL_EVIDENCE_ONLY_NOT_CURRENT_MEMORY_OR_AUTHORITY"
@@ -32,7 +32,7 @@ def _text(value: Any) -> str:
     return str(value)
 
 
-def _score(row: dict[str, Any], query: str) -> int:
+def _score(row: dict[str, Any], query: str, overlay_rows: list[dict[str, Any]] | None = None) -> int:
     q = query.casefold().strip()
     if not q:
         return 1
@@ -46,6 +46,7 @@ def _score(row: dict[str, Any], query: str) -> int:
         "reevaluation": _text(row.get("later_reevaluation")).casefold(),
         "understanding": _text(row.get("current_understanding")).casefold(),
         "sources": _text(row.get("source_ids")).casefold(),
+        "overlays": _text(overlay_rows or []).casefold(),
     }
     score = 0
     if q == fields["id"]:
@@ -56,6 +57,8 @@ def _score(row: dict[str, Any], query: str) -> int:
         score += 30
     if q in fields["keys"]:
         score += 25
+    if q in fields["overlays"]:
+        score += 20
     for token in tokens:
         if token in fields["id"]:
             score += 12
@@ -64,6 +67,8 @@ def _score(row: dict[str, Any], query: str) -> int:
         if token in fields["keys"]:
             score += 7
         if token in fields["event"]:
+            score += 5
+        if token in fields["overlays"]:
             score += 5
         if token in fields["interpretation"]:
             score += 3
@@ -74,6 +79,49 @@ def _score(row: dict[str, Any], query: str) -> int:
         if token in fields["sources"]:
             score += 2
     return score
+
+
+def _overlay_privacy_scope(row: dict[str, Any], target_privacy_scope: Any) -> str | None:
+    explicit = row.get("privacy_scope")
+    if isinstance(explicit, str) and explicit:
+        return explicit
+    if isinstance(target_privacy_scope, str) and target_privacy_scope:
+        return target_privacy_scope
+    return None
+
+
+def _visible_overlay_rows(
+    rows: list[dict[str, Any]],
+    *,
+    target_privacy_scope: Any,
+    audit_all_privacy: bool,
+    authorized_privacy: set[str],
+) -> list[dict[str, Any]]:
+    visible: list[dict[str, Any]] = []
+    for row in rows:
+        effective_scope = _overlay_privacy_scope(row, target_privacy_scope)
+        if not audit_all_privacy:
+            if effective_scope is None or effective_scope not in authorized_privacy:
+                continue
+        item = normalized_record(row)
+        item["effective_privacy_scope"] = effective_scope
+        visible.append(item)
+    return visible
+
+
+def _effective_source_ids(base_row: dict[str, Any], overlay_rows: list[dict[str, Any]]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for source_id in row_source_ids(base_row):
+        if source_id not in seen:
+            seen.add(source_id)
+            ordered.append(source_id)
+    for overlay in overlay_rows:
+        for source_id in row_source_ids(overlay):
+            if source_id not in seen:
+                seen.add(source_id)
+                ordered.append(source_id)
+    return ordered
 
 
 def main() -> int:
@@ -111,19 +159,8 @@ def main() -> int:
             print(f"ERROR: {error}", file=sys.stderr)
         return 2
 
-    amendments: dict[str, list[dict[str, Any]]] = {}
-    for row in union["amendments"]:
-        target = row.get("target_memory_id")
-        if isinstance(target, str) and target:
-            amendments.setdefault(target, []).append(row)
-    corrections: dict[str, list[dict[str, Any]]] = {}
-    for row in union["corrections"]:
-        target = row.get("target_memory_id") or row.get("memory_id")
-        if isinstance(target, str) and target:
-            corrections.setdefault(target, []).append(row)
-
-    hits: list[tuple[int, str, dict[str, Any]]] = []
-    for memory_id, row in union["memory_by_id"].items():
+    hits: list[tuple[int, str, dict[str, Any], dict[str, list[dict[str, Any]]]]] = []
+    for memory_id, row in union["effective_memory_by_id"].items():
         privacy_scope = row.get("privacy_scope")
         if not args.audit_all_privacy:
             if not isinstance(privacy_scope, str) or privacy_scope not in authorized_privacy:
@@ -132,18 +169,48 @@ def main() -> int:
             continue
         if args.historical_canonicity and row.get("historical_canonicity") != args.historical_canonicity:
             continue
-        score = _score(row, args.query)
+
+        canon_overlays = _visible_overlay_rows(
+            list(union["canon_overlays_by_target"].get(memory_id, [])),
+            target_privacy_scope=privacy_scope,
+            audit_all_privacy=args.audit_all_privacy,
+            authorized_privacy=authorized_privacy,
+        )
+        amendments = _visible_overlay_rows(
+            list(union["amendments_by_target"].get(memory_id, [])),
+            target_privacy_scope=privacy_scope,
+            audit_all_privacy=args.audit_all_privacy,
+            authorized_privacy=authorized_privacy,
+        )
+        corrections = _visible_overlay_rows(
+            list(union["corrections_by_target"].get(memory_id, [])),
+            target_privacy_scope=privacy_scope,
+            audit_all_privacy=args.audit_all_privacy,
+            authorized_privacy=authorized_privacy,
+        )
+        visible_overlays = canon_overlays + amendments + corrections
+        score = _score(row, args.query, visible_overlays)
         if score <= 0:
             continue
-        hits.append((score, memory_id, row))
+        hits.append((score, memory_id, row, {
+            "canon_overlays": canon_overlays,
+            "amendments": amendments,
+            "corrections": corrections,
+        }))
 
     hits.sort(key=lambda item: (-item[0], _text(item[2].get("event_time")), item[1]))
     results: list[dict[str, Any]] = []
-    for score, memory_id, row in hits[: max(0, args.limit)]:
+    for score, memory_id, row, overlay_sets in hits[: max(0, args.limit)]:
+        visible_overlay_rows = (
+            overlay_sets["canon_overlays"]
+            + overlay_sets["amendments"]
+            + overlay_sets["corrections"]
+        )
         results.append({
             "score": score,
             "memory_id": memory_id,
             "memory_class": row.get("memory_class"),
+            "stored_historical_canonicity": row.get("__stored_historical_canonicity"),
             "historical_canonicity": row.get("historical_canonicity"),
             "event_time": row.get("event_time"),
             "observed_event": row.get("observed_event"),
@@ -154,17 +221,13 @@ def main() -> int:
             "privacy_scope": row.get("privacy_scope"),
             "currentness_rule": row.get("currentness_rule"),
             "governed_memory_admission": row.get("governed_memory_admission"),
-            "source_ids": row.get("source_ids") or [],
+            "source_ids": _effective_source_ids(row, visible_overlay_rows),
             "ledger_path": row.get("__ledger_path"),
             "ledger_line": row.get("__ledger_line"),
-            "amendments": [
-                {key: value for key, value in amendment.items() if not key.startswith("__")}
-                for amendment in amendments.get(memory_id, [])
-            ],
-            "classification_corrections": [
-                {key: value for key, value in correction.items() if not key.startswith("__")}
-                for correction in corrections.get(memory_id, [])
-            ],
+            "historical_canon_overlays": overlay_sets["canon_overlays"],
+            "amendments": overlay_sets["amendments"],
+            "classification_corrections": overlay_sets["corrections"],
+            "overlay_privacy_semantics": "OVERLAY_INHERITS_TARGET_PRIVACY_UNLESS_EXPLICIT_SCOPE_REQUIRES_SEPARATE_AUTHORIZATION",
             "result_semantics": RESULT_SEMANTICS,
         })
 
