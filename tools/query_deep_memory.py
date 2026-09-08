@@ -14,7 +14,12 @@ import json
 import sys
 from typing import Any
 
-from deep_memory_catalog import load_union, normalized_record, row_source_ids
+from deep_memory_catalog import (
+    exact_historical_canonicity,
+    load_union,
+    normalized_record,
+    row_source_ids,
+)
 
 RESULT_SCHEMA = "VERA_DEEP_MEMORY_EVIDENCE_RESULT_V1"
 RESULT_SEMANTICS = "HISTORICAL_EVIDENCE_ONLY_NOT_CURRENT_MEMORY_OR_AUTHORITY"
@@ -109,6 +114,31 @@ def _visible_overlay_rows(
     return visible
 
 
+def _visible_effective_canonicity(
+    base_row: dict[str, Any],
+    canon_overlays: list[dict[str, Any]],
+    corrections: list[dict[str, Any]],
+) -> str | None:
+    """Compute effective historical canonicity only from caller-visible evidence.
+
+    This prevents a restricted classification correction from leaking its conclusion
+    through the classification field when the base memory is visible but the
+    correction itself is outside the caller's authorized privacy scope.
+    """
+    effective = exact_historical_canonicity(base_row.get("historical_canonicity"))
+    for overlay in canon_overlays:
+        candidate = exact_historical_canonicity(overlay.get("historical_canonicity"))
+        if candidate is not None:
+            effective = candidate
+    for correction in corrections:
+        candidate = exact_historical_canonicity(correction.get("corrected_historical_canonicity"))
+        if candidate is None:
+            candidate = exact_historical_canonicity(correction.get("historical_canonicity"))
+        if candidate is not None:
+            effective = candidate
+    return effective
+
+
 def _effective_source_ids(base_row: dict[str, Any], overlay_rows: list[dict[str, Any]]) -> list[str]:
     seen: set[str] = set()
     ordered: list[str] = []
@@ -159,15 +189,13 @@ def main() -> int:
             print(f"ERROR: {error}", file=sys.stderr)
         return 2
 
-    hits: list[tuple[int, str, dict[str, Any], dict[str, list[dict[str, Any]]]]] = []
-    for memory_id, row in union["effective_memory_by_id"].items():
+    hits: list[tuple[int, str, dict[str, Any], str | None, dict[str, list[dict[str, Any]]]]] = []
+    for memory_id, row in union["memory_by_id"].items():
         privacy_scope = row.get("privacy_scope")
         if not args.audit_all_privacy:
             if not isinstance(privacy_scope, str) or privacy_scope not in authorized_privacy:
                 continue
         if args.memory_class and row.get("memory_class") != args.memory_class:
-            continue
-        if args.historical_canonicity and row.get("historical_canonicity") != args.historical_canonicity:
             continue
 
         canon_overlays = _visible_overlay_rows(
@@ -188,11 +216,15 @@ def main() -> int:
             audit_all_privacy=args.audit_all_privacy,
             authorized_privacy=authorized_privacy,
         )
+        effective_canonicity = _visible_effective_canonicity(row, canon_overlays, corrections)
+        if args.historical_canonicity and effective_canonicity != args.historical_canonicity:
+            continue
+
         visible_overlays = canon_overlays + amendments + corrections
         score = _score(row, args.query, visible_overlays)
         if score <= 0:
             continue
-        hits.append((score, memory_id, row, {
+        hits.append((score, memory_id, row, effective_canonicity, {
             "canon_overlays": canon_overlays,
             "amendments": amendments,
             "corrections": corrections,
@@ -200,7 +232,7 @@ def main() -> int:
 
     hits.sort(key=lambda item: (-item[0], _text(item[2].get("event_time")), item[1]))
     results: list[dict[str, Any]] = []
-    for score, memory_id, row, overlay_sets in hits[: max(0, args.limit)]:
+    for score, memory_id, row, effective_canonicity, overlay_sets in hits[: max(0, args.limit)]:
         visible_overlay_rows = (
             overlay_sets["canon_overlays"]
             + overlay_sets["amendments"]
@@ -210,8 +242,8 @@ def main() -> int:
             "score": score,
             "memory_id": memory_id,
             "memory_class": row.get("memory_class"),
-            "stored_historical_canonicity": row.get("__stored_historical_canonicity"),
-            "historical_canonicity": row.get("historical_canonicity"),
+            "stored_historical_canonicity": row.get("historical_canonicity"),
+            "historical_canonicity": effective_canonicity,
             "event_time": row.get("event_time"),
             "observed_event": row.get("observed_event"),
             "participant_interpretation_at_time": row.get("participant_interpretation_at_time"),
