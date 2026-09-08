@@ -31,7 +31,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile tools
-        run: python -m py_compile tools/deep_memory_catalog.py tools/query_deep_memory.py
+        run: python -m py_compile tools/deep_memory_catalog.py tools/query_deep_memory.py tools/validate_architecture_binding.py
+      - name: Validate architecture binding
+        run: python tools/validate_architecture_binding.py
       - name: Validate complete ledger union
         id: union
         shell: bash
