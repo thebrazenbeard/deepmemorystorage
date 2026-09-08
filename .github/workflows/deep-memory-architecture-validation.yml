@@ -70,6 +70,28 @@ jobs:
           set -e
           test "$code" -ne 0
           grep -q "authorized-privacy\|audit-all-privacy" /tmp/privacy-err
+      - name: Prove Pass-010 historical-canon overlay is effective
+        run: |
+          python tools/query_deep_memory.py "AUTO-EARLY-001" --audit-all-privacy --historical-canonicity CANONICAL_HISTORY --limit 5 --json > /tmp/legacy-overlay.json
+          python - <<'PY'
+          import json
+          data = json.load(open('/tmp/legacy-overlay.json', encoding='utf-8'))
+          row = next(item for item in data['results'] if item['memory_id'] == 'AUTO-EARLY-001')
+          assert row['historical_canonicity'] == 'CANONICAL_HISTORY'
+          assert row['historical_canon_overlays'], row
+          assert any(item.get('overlay_id') == 'historical_canon_pass10' for item in row['historical_canon_overlays'])
+          PY
+      - name: Prove amendment and correction text are searchable
+        run: |
+          python tools/query_deep_memory.py "immutable node ownership" --audit-all-privacy --limit 20 --json > /tmp/amendment-query.json
+          python tools/query_deep_memory.py "source-scope correction" --audit-all-privacy --limit 20 --json > /tmp/correction-query.json
+          python - <<'PY'
+          import json
+          a = json.load(open('/tmp/amendment-query.json', encoding='utf-8'))
+          c = json.load(open('/tmp/correction-query.json', encoding='utf-8'))
+          assert any(item['memory_id'] == 'WORK-BUS-RADAR-CENTRAL-RECONCILIATION-0906' for item in a['results']), a
+          assert any(item['memory_id'] == 'AUTO-ORIENTATION-020' for item in c['results']), c
+          PY
       - name: Smoke-test explicit archive-audit query
         run: |
           python tools/query_deep_memory.py "Vera" --audit-all-privacy --limit 3 --json > /tmp/deep-memory-query.json
@@ -82,5 +104,6 @@ jobs:
           assert data['results'], 'expected at least one bounded historical result'
           for row in data['results']:
               assert row.get('result_semantics') == 'HISTORICAL_EVIDENCE_ONLY_NOT_CURRENT_MEMORY_OR_AUTHORITY'
+              assert row.get('overlay_privacy_semantics') == 'OVERLAY_INHERITS_TARGET_PRIVACY_UNLESS_EXPLICIT_SCOPE_REQUIRES_SEPARATE_AUTHORIZATION'
               assert row.get('ledger_path')
           PY
