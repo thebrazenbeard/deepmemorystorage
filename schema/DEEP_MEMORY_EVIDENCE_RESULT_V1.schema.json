@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "VERA_DEEP_MEMORY_EVIDENCE_RESULT_V1",
+  "title": "Vera Deep Memory historical evidence search result",
+  "type": "object",
+  "required": ["schema", "query", "privacy_mode", "count", "results"],
+  "properties": {
+    "schema": {"const": "VERA_DEEP_MEMORY_EVIDENCE_RESULT_V1"},
+    "query": {"type": "string"},
+    "privacy_mode": {"enum": ["AUTHORIZED_SCOPE_FILTER", "EXPLICIT_ARCHIVE_AUDIT_ALL"]},
+    "authorized_privacy_scopes": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "count": {"type": "integer", "minimum": 0},
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "memory_id",
+          "privacy_scope",
+          "source_ids",
+          "ledger_path",
+          "result_semantics"
+        ],
+        "properties": {
+          "score": {"type": "integer", "minimum": 0},
+          "memory_id": {"type": "string", "minLength": 1},
+          "memory_class": {"type": ["string", "null"]},
+          "historical_canonicity": {"type": ["string", "null"]},
+          "event_time": {},
+          "observed_event": {},
+          "participant_interpretation_at_time": {},
+          "later_reevaluation": {},
+          "reality_boundary": {},
+          "provenance_ceiling": {},
+          "privacy_scope": {"type": ["string", "null"]},
+          "currentness_rule": {},
+          "governed_memory_admission": {},
+          "source_ids": {"type": "array"},
+          "ledger_path": {"type": "string", "minLength": 1},
+          "ledger_line": {"type": "integer", "minimum": 1},
+          "amendments": {"type": "array"},
+          "classification_corrections": {"type": "array"},
+          "result_semantics": {
+            "const": "HISTORICAL_EVIDENCE_ONLY_NOT_CURRENT_MEMORY_OR_AUTHORITY"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
