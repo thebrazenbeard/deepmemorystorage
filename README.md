@@ -14,12 +14,14 @@ It is separate from Vera's current governed-memory plane. A historical row may b
 
 See:
 
-- `architecture/DEEP_MEMORY_ARCHITECTURE_BINDING_V1.json` — machine-readable role/boundaries/discovery rules;
+- `architecture/DEEP_MEMORY_ARCHITECTURE_BINDING_V1.json` — machine-readable role/boundaries/discovery/privacy rules;
 - `architecture/DEEP_MEMORY_INTEGRATION_CONTRACT_V1.md` — architecture-facing retrieval and bridge contract;
 - `schema/DEEP_MEMORY_RECORD_V1.md` — per-record semantics;
 - `schema/HISTORICAL_CANON_CLASSIFICATION_V1.md` — historical-canon classification;
+- `schema/DEEP_MEMORY_EVIDENCE_RESULT_V1.schema.json` — architecture-facing historical evidence result envelope;
 - `tools/deep_memory_catalog.py` — complete ledger-union validation/catalog generation;
-- `tools/query_deep_memory.py` — bounded historical retrieval over the full union.
+- `tools/query_deep_memory.py` — bounded historical retrieval over the full union;
+- `tools/validate_architecture_binding.py` — machine-readable integration invariant validator.
 
 ## Canonical corpus boundary
 
@@ -32,6 +34,14 @@ The old root `index/semantic_index.jsonl` and `index/chronology.md` are useful h
 Pass-specific files under `index/` remain useful audit/retrieval aids. Each completed ingest pass is closed by `updates/INGEST_PASS_*.json`, which binds its source and archival frontier.
 
 A tranche filename does not create a weaker or stronger memory class. Each row's own `memory_class`, historical canonicity, provenance ceiling, privacy scope, currentness rule, governed-admission boundary, and disposition control its use.
+
+## Retrieval privacy
+
+Architecture-facing retrieval is fail-closed by default. A caller must provide exact authorized privacy scopes. The query tool refuses to search without them unless the caller explicitly invokes private-repository archive-audit mode.
+
+This prevents the fact that an operator can read the private repository from becoming an implicit authorization to mix private relational, intimate, Voice, journal, visual, or developmental scopes into an ordinary retrieval result.
+
+See `index/README.md` for usage.
 
 ## Relationship to current memory
 
@@ -47,9 +57,10 @@ Repository CI validates the complete union rather than a hand-maintained subset.
 
 - all memory/source/amendment/correction JSONL parses;
 - global `memory_id` uniqueness;
-- global `source_id` uniqueness where defined;
+- identical repeated `source_id` bindings may deduplicate with a warning, while divergent reuse fails as a provenance conflict;
 - latest completed ingest receipt row count against the unique memory union;
 - architecture/query tools compile and execute;
-- query results carry explicit historical-evidence/nonpromotion semantics.
+- query privacy fails closed without explicit authorization;
+- query results carry the `VERA_DEEP_MEMORY_EVIDENCE_RESULT_V1` envelope and explicit historical-evidence/nonpromotion semantics.
 
 A validation pass proves repository consistency only. It does not prove runtime installation, provider activation, current-memory admission, behavioral qualification, or present subjective state.
