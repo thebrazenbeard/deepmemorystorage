@@ -20,6 +20,13 @@ ROOT = Path(__file__).resolve().parents[1]
 LEDGER = ROOT / "ledger"
 UPDATES = ROOT / "updates"
 
+VALID_HISTORICAL_CANONICITY = {
+    "CANONICAL_HISTORY",
+    "UNRESOLVED_HISTORY",
+    "REJECTED_OR_FALSE_ATTRIBUTION",
+    "OTHER_IDENTITY_OR_DOMAIN_HISTORY",
+}
+
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
@@ -41,8 +48,22 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def read_json_object(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as fh:
+        obj = json.load(fh)
+    if not isinstance(obj, dict):
+        raise ValueError(f"{path}: expected JSON object")
+    obj = dict(obj)
+    obj["__ledger_path"] = str(path.relative_to(ROOT))
+    return obj
+
+
 def matching(prefix: str) -> list[Path]:
     return sorted(path for path in LEDGER.glob(f"{prefix}*.jsonl") if path.is_file())
+
+
+def matching_json(prefix: str) -> list[Path]:
+    return sorted(path for path in LEDGER.glob(f"{prefix}*.json") if path.is_file())
 
 
 def latest_receipt() -> tuple[Path | None, dict[str, Any] | None]:
@@ -63,7 +84,6 @@ def latest_receipt() -> tuple[Path | None, dict[str, Any] | None]:
 
 
 def normalized_record(row: dict[str, Any]) -> dict[str, Any]:
-    """Return record content without catalog-location metadata."""
     return {key: value for key, value in row.items() if not key.startswith("__")}
 
 
@@ -84,16 +104,35 @@ def sha256_rows(rows: Iterable[dict[str, Any]]) -> str:
     return digest.hexdigest()
 
 
+def exact_historical_canonicity(value: Any) -> str | None:
+    if isinstance(value, str) and value in VALID_HISTORICAL_CANONICITY:
+        return value
+    return None
+
+
+def row_source_ids(row: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+    source_ids = row.get("source_ids")
+    if isinstance(source_ids, list):
+        values.extend(item for item in source_ids if isinstance(item, str) and item)
+    source_id = row.get("source_id")
+    if isinstance(source_id, str) and source_id:
+        values.append(source_id)
+    return values
+
+
 def load_union() -> dict[str, Any]:
     memory_paths = matching("memories")
     source_paths = matching("sources")
     amendment_paths = matching("provenance_amendments")
     correction_paths = matching("classification_corrections")
+    historical_canon_paths = matching_json("historical_canon")
 
     memories = [row for path in memory_paths for row in read_jsonl(path)]
     sources = [row for path in source_paths for row in read_jsonl(path)]
     amendments = [row for path in amendment_paths for row in read_jsonl(path)]
     corrections = [row for path in correction_paths for row in read_jsonl(path)]
+    historical_canon_overlays = [read_json_object(path) for path in historical_canon_paths]
 
     errors: list[str] = []
     warnings: list[str] = []
@@ -113,10 +152,6 @@ def load_union() -> dict[str, Any]:
         else:
             memory_by_id[memory_id] = row
 
-    # Source bindings can be restated in later append-only tranches. Reusing the
-    # same source_id is harmless only when the source record is semantically
-    # identical after removing catalog location metadata. Divergent reuse is a
-    # provenance conflict and fails closed.
     source_by_id: dict[str, dict[str, Any]] = {}
     identical_source_restatements = 0
     for row in sources:
@@ -153,24 +188,97 @@ def load_union() -> dict[str, Any]:
             warnings.append(f"{row['__ledger_path']}:{row['__ledger_line']}: amendment without target_memory_id")
 
     corrections_by_target: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    frontier_corrections: list[dict[str, Any]] = []
     for row in corrections:
         target = row.get("target_memory_id") or row.get("memory_id")
         if isinstance(target, str) and target:
             corrections_by_target[target].append(row)
             if target not in memory_by_id:
                 warnings.append(f"classification correction {row.get('correction_id')} targets unknown memory_id {target}")
+            continue
+        frontier_target = row.get("target")
+        if isinstance(frontier_target, str) and frontier_target:
+            frontier_corrections.append(row)
         else:
             warnings.append(f"{row['__ledger_path']}:{row['__ledger_line']}: classification correction without target")
 
-    missing_source_refs: list[str] = []
-    for memory_id, row in memory_by_id.items():
-        source_ids = row.get("source_ids") or []
-        if not isinstance(source_ids, list):
-            warnings.append(f"{memory_id}: source_ids is not a list")
+    canon_overlays_by_target: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    historical_canon_overlay_assignment_count = 0
+    for overlay in historical_canon_overlays:
+        path = overlay["__ledger_path"]
+        memory_ids = overlay.get("memory_ids")
+        if not isinstance(memory_ids, list) or not all(isinstance(item, str) and item for item in memory_ids):
+            errors.append(f"{path}: historical-canon overlay requires string memory_ids")
             continue
-        for source_id in source_ids:
-            if isinstance(source_id, str) and source_id and source_id not in source_by_id:
-                missing_source_refs.append(f"{memory_id}->{source_id}")
+        declared_count = overlay.get("applies_to_preexisting_memory_rows")
+        if isinstance(declared_count, int) and declared_count != len(memory_ids):
+            errors.append(
+                f"{path}: declares applies_to_preexisting_memory_rows={declared_count}; "
+                f"memory_ids contains {len(memory_ids)}"
+            )
+        canon = exact_historical_canonicity(overlay.get("historical_canonicity"))
+        if canon is None:
+            errors.append(f"{path}: historical-canon overlay has unsupported historical_canonicity")
+            continue
+        special_boundaries = overlay.get("special_boundaries") or {}
+        if not isinstance(special_boundaries, dict):
+            errors.append(f"{path}: special_boundaries must be an object when present")
+            special_boundaries = {}
+        extra_boundaries = sorted(set(special_boundaries) - set(memory_ids))
+        if extra_boundaries:
+            warnings.append(
+                f"{path}: special_boundaries references memory_ids outside overlay list: "
+                + ", ".join(extra_boundaries)
+            )
+        for memory_id in memory_ids:
+            overlay_row = {
+                "overlay_id": Path(path).stem,
+                "historical_canonicity": canon,
+                "canon_scope": overlay.get("canon_scope"),
+                "global_correction": overlay.get("global_correction"),
+                "special_boundary": special_boundaries.get(memory_id),
+                "__ledger_path": path,
+            }
+            canon_overlays_by_target[memory_id].append(overlay_row)
+            historical_canon_overlay_assignment_count += 1
+            if memory_id not in memory_by_id:
+                errors.append(f"{path}: historical-canon overlay targets unknown memory_id {memory_id}")
+
+    def effective_canonicity(memory_id: str, row: dict[str, Any]) -> str | None:
+        effective = exact_historical_canonicity(row.get("historical_canonicity"))
+        for overlay in canon_overlays_by_target.get(memory_id, []):
+            candidate = exact_historical_canonicity(overlay.get("historical_canonicity"))
+            if candidate is not None:
+                effective = candidate
+        for correction in corrections_by_target.get(memory_id, []):
+            candidate = exact_historical_canonicity(correction.get("corrected_historical_canonicity"))
+            if candidate is None:
+                candidate = exact_historical_canonicity(correction.get("historical_canonicity"))
+            if candidate is not None:
+                effective = candidate
+        return effective
+
+    effective_memory_by_id: dict[str, dict[str, Any]] = {}
+    for memory_id, row in memory_by_id.items():
+        effective = dict(row)
+        effective["__stored_historical_canonicity"] = row.get("historical_canonicity")
+        effective["historical_canonicity"] = effective_canonicity(memory_id, row)
+        effective["__historical_canon_overlays"] = canon_overlays_by_target.get(memory_id, [])
+        effective["__provenance_amendments"] = amendments_by_target.get(memory_id, [])
+        effective["__classification_corrections"] = corrections_by_target.get(memory_id, [])
+        effective_memory_by_id[memory_id] = effective
+        if effective["historical_canonicity"] is None:
+            warnings.append(f"{memory_id}: no effective historical_canonicity after overlays/corrections")
+
+    missing_source_refs: list[str] = []
+    source_ref_rows: list[tuple[str, dict[str, Any]]] = []
+    source_ref_rows.extend((memory_id, row) for memory_id, row in memory_by_id.items())
+    source_ref_rows.extend((f"amendment:{row.get('amendment_id') or row.get('__ledger_path')}", row) for row in amendments)
+    source_ref_rows.extend((f"correction:{row.get('correction_id') or row.get('__ledger_path')}", row) for row in corrections)
+    for label, row in source_ref_rows:
+        for source_id in row_source_ids(row):
+            if source_id not in source_by_id:
+                missing_source_refs.append(f"{label}->{source_id}")
     if missing_source_refs:
         warnings.append(
             "missing referenced source ids (may be intentional external historical bindings): "
@@ -179,12 +287,21 @@ def load_union() -> dict[str, Any]:
         )
 
     catalog: list[dict[str, Any]] = []
-    for memory_id in sorted(memory_by_id):
-        row = memory_by_id[memory_id]
+    for memory_id in sorted(effective_memory_by_id):
+        row = effective_memory_by_id[memory_id]
+        overlay_paths = [item["__ledger_path"] for item in canon_overlays_by_target.get(memory_id, [])]
+        overlay_boundaries = [
+            item.get("special_boundary")
+            for item in canon_overlays_by_target.get(memory_id, [])
+            if item.get("special_boundary")
+        ]
         catalog.append({
             "memory_id": memory_id,
             "memory_class": row.get("memory_class"),
             "historical_canonicity": row.get("historical_canonicity"),
+            "stored_historical_canonicity": row.get("__stored_historical_canonicity"),
+            "historical_canon_overlay_paths": overlay_paths,
+            "historical_canon_boundaries": overlay_boundaries,
             "event_time": row.get("event_time"),
             "time_status": row.get("time_status"),
             "privacy_scope": row.get("privacy_scope"),
@@ -223,7 +340,13 @@ def load_union() -> dict[str, Any]:
         "sources": sources,
         "amendments": amendments,
         "corrections": corrections,
+        "frontier_corrections": frontier_corrections,
+        "historical_canon_overlays": historical_canon_overlays,
+        "canon_overlays_by_target": canon_overlays_by_target,
+        "amendments_by_target": amendments_by_target,
+        "corrections_by_target": corrections_by_target,
         "memory_by_id": memory_by_id,
+        "effective_memory_by_id": effective_memory_by_id,
         "source_by_id": source_by_id,
         "catalog": catalog,
         "errors": errors,
@@ -237,9 +360,13 @@ def load_union() -> dict[str, Any]:
         "identical_source_restatements": identical_source_restatements,
         "amendment_count": len(amendments),
         "classification_correction_count": len(corrections),
+        "frontier_correction_count": len(frontier_corrections),
+        "historical_canon_overlay_file_count": len(historical_canon_overlays),
+        "historical_canon_overlay_assignment_count": historical_canon_overlay_assignment_count,
         "catalog_digest_sha256": sha256_rows(catalog),
         "memory_paths": [str(path.relative_to(ROOT)) for path in memory_paths],
         "source_paths": [str(path.relative_to(ROOT)) for path in source_paths],
+        "historical_canon_paths": [str(path.relative_to(ROOT)) for path in historical_canon_paths],
     }
 
 
@@ -256,9 +383,13 @@ def build_manifest(union: dict[str, Any]) -> dict[str, Any]:
         "identical_source_restatements": union["identical_source_restatements"],
         "provenance_amendment_rows": union["amendment_count"],
         "classification_correction_rows": union["classification_correction_count"],
+        "frontier_classification_corrections": union["frontier_correction_count"],
+        "historical_canon_overlay_files": union["historical_canon_overlay_file_count"],
+        "historical_canon_overlay_assignments": union["historical_canon_overlay_assignment_count"],
         "catalog_digest_sha256": union["catalog_digest_sha256"],
         "memory_tranches": union["memory_paths"],
         "source_tranches": union["source_paths"],
+        "historical_canon_overlays": union["historical_canon_paths"],
         "validation": {
             "errors": union["errors"],
             "warnings": union["warnings"],
@@ -307,6 +438,9 @@ def main() -> int:
         "identical_source_restatements": union["identical_source_restatements"],
         "amendment_count": union["amendment_count"],
         "classification_correction_count": union["classification_correction_count"],
+        "frontier_correction_count": union["frontier_correction_count"],
+        "historical_canon_overlay_file_count": union["historical_canon_overlay_file_count"],
+        "historical_canon_overlay_assignment_count": union["historical_canon_overlay_assignment_count"],
         "catalog_digest_sha256": union["catalog_digest_sha256"],
         "errors": union["errors"],
         "warnings": union["warnings"],
@@ -318,7 +452,8 @@ def main() -> int:
         print(
             f"Deep Memory union: {union['memory_count']} memories, {union['source_count']} unique sources "
             f"({union['source_row_count']} source rows; {union['identical_source_restatements']} identical restatements), "
-            f"{union['amendment_count']} amendments, {union['classification_correction_count']} corrections; "
+            f"{union['amendment_count']} amendments, {union['classification_correction_count']} corrections, "
+            f"{union['historical_canon_overlay_assignment_count']} historical-canon overlay assignments; "
             f"latest={union['latest_pass_id']}"
         )
         for warning in union["warnings"]:
