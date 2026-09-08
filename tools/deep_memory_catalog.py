@@ -121,6 +121,16 @@ def row_source_ids(row: dict[str, Any]) -> list[str]:
     return values
 
 
+def dedupe_ordered(values: Iterable[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
+
+
 def load_union() -> dict[str, Any]:
     memory_paths = matching("memories")
     source_paths = matching("sources")
@@ -295,6 +305,12 @@ def load_union() -> dict[str, Any]:
             for item in canon_overlays_by_target.get(memory_id, [])
             if item.get("special_boundary")
         ]
+        stored_source_ids = row_source_ids(row)
+        effective_source_ids = dedupe_ordered(
+            stored_source_ids
+            + [source_id for item in amendments_by_target.get(memory_id, []) for source_id in row_source_ids(item)]
+            + [source_id for item in corrections_by_target.get(memory_id, []) for source_id in row_source_ids(item)]
+        )
         catalog.append({
             "memory_id": memory_id,
             "memory_class": row.get("memory_class"),
@@ -305,7 +321,8 @@ def load_union() -> dict[str, Any]:
             "event_time": row.get("event_time"),
             "time_status": row.get("time_status"),
             "privacy_scope": row.get("privacy_scope"),
-            "source_ids": row.get("source_ids") or [],
+            "stored_source_ids": stored_source_ids,
+            "source_ids": effective_source_ids,
             "source_claim_class": row.get("source_claim_class"),
             "provenance_ceiling": row.get("provenance_ceiling"),
             "currentness_rule": row.get("currentness_rule"),
