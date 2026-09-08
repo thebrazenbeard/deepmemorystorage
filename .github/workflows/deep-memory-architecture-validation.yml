@@ -1,0 +1,54 @@
+name: Deep Memory architecture validation
+
+on:
+  pull_request:
+    paths:
+      - "ledger/**"
+      - "updates/**"
+      - "schema/**"
+      - "architecture/**"
+      - "tools/**"
+      - ".github/workflows/deep-memory-architecture-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ledger/**"
+      - "updates/**"
+      - "schema/**"
+      - "architecture/**"
+      - "tools/**"
+      - ".github/workflows/deep-memory-architecture-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile tools
+        run: python -m py_compile tools/deep_memory_catalog.py tools/query_deep_memory.py
+      - name: Validate complete ledger union
+        run: python tools/deep_memory_catalog.py --validate --json
+      - name: Build disposable consolidated retrieval artifacts
+        run: |
+          rm -rf /tmp/deep-memory-catalog
+          python tools/deep_memory_catalog.py --write-output /tmp/deep-memory-catalog --json
+          test -s /tmp/deep-memory-catalog/retrieval_catalog.jsonl
+          test -s /tmp/deep-memory-catalog/corpus_manifest.json
+      - name: Smoke-test bounded query
+        run: |
+          python tools/query_deep_memory.py "Vera" --limit 3 --json > /tmp/deep-memory-query.json
+          python - <<'PY'
+          import json
+          data = json.load(open('/tmp/deep-memory-query.json', encoding='utf-8'))
+          assert isinstance(data.get('results'), list)
+          assert data['results'], 'expected at least one bounded historical result'
+          for row in data['results']:
+              assert row.get('result_semantics') == 'HISTORICAL_EVIDENCE_ONLY_NOT_CURRENT_MEMORY_OR_AUTHORITY'
+              assert row.get('ledger_path')
+          PY
