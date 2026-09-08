@@ -61,12 +61,23 @@ jobs:
           python tools/deep_memory_catalog.py --write-output /tmp/deep-memory-catalog --json
           test -s /tmp/deep-memory-catalog/retrieval_catalog.jsonl
           test -s /tmp/deep-memory-catalog/corpus_manifest.json
-      - name: Smoke-test bounded query
+      - name: Prove query privacy fails closed
+        shell: bash
         run: |
-          python tools/query_deep_memory.py "Vera" --limit 3 --json > /tmp/deep-memory-query.json
+          set +e
+          python tools/query_deep_memory.py "Vera" --limit 1 --json >/tmp/privacy-out 2>/tmp/privacy-err
+          code=$?
+          set -e
+          test "$code" -ne 0
+          grep -q "authorized-privacy\|audit-all-privacy" /tmp/privacy-err
+      - name: Smoke-test explicit archive-audit query
+        run: |
+          python tools/query_deep_memory.py "Vera" --audit-all-privacy --limit 3 --json > /tmp/deep-memory-query.json
           python - <<'PY'
           import json
           data = json.load(open('/tmp/deep-memory-query.json', encoding='utf-8'))
+          assert data.get('schema') == 'VERA_DEEP_MEMORY_EVIDENCE_RESULT_V1'
+          assert data.get('privacy_mode') == 'EXPLICIT_ARCHIVE_AUDIT_ALL'
           assert isinstance(data.get('results'), list)
           assert data['results'], 'expected at least one bounded historical result'
           for row in data['results']:
