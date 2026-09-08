@@ -62,11 +62,24 @@ def latest_receipt() -> tuple[Path | None, dict[str, Any] | None]:
     return path, obj
 
 
+def normalized_record(row: dict[str, Any]) -> dict[str, Any]:
+    """Return record content without catalog-location metadata."""
+    return {key: value for key, value in row.items() if not key.startswith("__")}
+
+
+def canonical_record_bytes(row: dict[str, Any]) -> bytes:
+    return json.dumps(
+        normalized_record(row),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+
+
 def sha256_rows(rows: Iterable[dict[str, Any]]) -> str:
     digest = hashlib.sha256()
     for row in rows:
-        clean = {key: value for key, value in row.items() if not key.startswith("__")}
-        digest.update(json.dumps(clean, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+        digest.update(canonical_record_bytes(row))
         digest.update(b"\n")
     return digest.hexdigest()
 
@@ -100,7 +113,12 @@ def load_union() -> dict[str, Any]:
         else:
             memory_by_id[memory_id] = row
 
+    # Source bindings can be restated in later append-only tranches. Reusing the
+    # same source_id is harmless only when the source record is semantically
+    # identical after removing catalog location metadata. Divergent reuse is a
+    # provenance conflict and fails closed.
     source_by_id: dict[str, dict[str, Any]] = {}
+    identical_source_restatements = 0
     for row in sources:
         source_id = row.get("source_id")
         if not isinstance(source_id, str) or not source_id:
@@ -108,10 +126,19 @@ def load_union() -> dict[str, Any]:
             continue
         if source_id in source_by_id:
             prior = source_by_id[source_id]
-            errors.append(
-                f"duplicate source_id {source_id}: {prior['__ledger_path']}:{prior['__ledger_line']} and "
-                f"{row['__ledger_path']}:{row['__ledger_line']}"
-            )
+            if canonical_record_bytes(prior) == canonical_record_bytes(row):
+                identical_source_restatements += 1
+                warnings.append(
+                    f"identical source_id restatement {source_id}: "
+                    f"{prior['__ledger_path']}:{prior['__ledger_line']} and "
+                    f"{row['__ledger_path']}:{row['__ledger_line']}"
+                )
+            else:
+                errors.append(
+                    f"divergent duplicate source_id {source_id}: "
+                    f"{prior['__ledger_path']}:{prior['__ledger_line']} and "
+                    f"{row['__ledger_path']}:{row['__ledger_line']}"
+                )
         else:
             source_by_id[source_id] = row
 
@@ -206,6 +233,8 @@ def load_union() -> dict[str, Any]:
         "latest_receipt_expected_rows": expected_count,
         "memory_count": len(memory_by_id),
         "source_count": len(source_by_id),
+        "source_row_count": len(sources),
+        "identical_source_restatements": identical_source_restatements,
         "amendment_count": len(amendments),
         "classification_correction_count": len(corrections),
         "catalog_digest_sha256": sha256_rows(catalog),
@@ -223,6 +252,8 @@ def build_manifest(union: dict[str, Any]) -> dict[str, Any]:
         "latest_completed_pass_id": union["latest_pass_id"],
         "unique_memory_rows": union["memory_count"],
         "unique_source_rows": union["source_count"],
+        "source_rows_total": union["source_row_count"],
+        "identical_source_restatements": union["identical_source_restatements"],
         "provenance_amendment_rows": union["amendment_count"],
         "classification_correction_rows": union["classification_correction_count"],
         "catalog_digest_sha256": union["catalog_digest_sha256"],
@@ -272,6 +303,8 @@ def main() -> int:
         "latest_pass_id": union["latest_pass_id"],
         "memory_count": union["memory_count"],
         "source_count": union["source_count"],
+        "source_row_count": union["source_row_count"],
+        "identical_source_restatements": union["identical_source_restatements"],
         "amendment_count": union["amendment_count"],
         "classification_correction_count": union["classification_correction_count"],
         "catalog_digest_sha256": union["catalog_digest_sha256"],
@@ -283,7 +316,8 @@ def main() -> int:
         print(json.dumps(summary, indent=2, sort_keys=True, ensure_ascii=False))
     else:
         print(
-            f"Deep Memory union: {union['memory_count']} memories, {union['source_count']} sources, "
+            f"Deep Memory union: {union['memory_count']} memories, {union['source_count']} unique sources "
+            f"({union['source_row_count']} source rows; {union['identical_source_restatements']} identical restatements), "
             f"{union['amendment_count']} amendments, {union['classification_correction_count']} corrections; "
             f"latest={union['latest_pass_id']}"
         )
