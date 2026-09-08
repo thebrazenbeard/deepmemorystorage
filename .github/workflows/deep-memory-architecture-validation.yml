@@ -33,7 +33,26 @@ jobs:
       - name: Compile tools
         run: python -m py_compile tools/deep_memory_catalog.py tools/query_deep_memory.py
       - name: Validate complete ledger union
-        run: python tools/deep_memory_catalog.py --validate --json
+        id: union
+        shell: bash
+        run: |
+          set +e
+          python tools/deep_memory_catalog.py --validate --json > validation.json 2> validation.stderr
+          code=$?
+          cat validation.json || true
+          cat validation.stderr >&2 || true
+          echo "$code" > validation.exit_code
+          exit "$code"
+      - name: Preserve validation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deep-memory-validation-diagnostics
+          path: |
+            validation.json
+            validation.stderr
+            validation.exit_code
+          if-no-files-found: warn
       - name: Build disposable consolidated retrieval artifacts
         run: |
           rm -rf /tmp/deep-memory-catalog
