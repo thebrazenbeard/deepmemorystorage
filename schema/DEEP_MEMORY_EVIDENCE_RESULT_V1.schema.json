@@ -20,16 +20,28 @@
         "type": "object",
         "required": [
           "memory_id",
+          "historical_canonicity",
           "privacy_scope",
           "source_ids",
           "ledger_path",
+          "overlay_privacy_semantics",
           "result_semantics"
         ],
         "properties": {
           "score": {"type": "integer", "minimum": 0},
           "memory_id": {"type": "string", "minLength": 1},
           "memory_class": {"type": ["string", "null"]},
-          "historical_canonicity": {"type": ["string", "null"]},
+          "stored_historical_canonicity": {"type": ["string", "null"]},
+          "historical_canonicity": {
+            "type": ["string", "null"],
+            "enum": [
+              "CANONICAL_HISTORY",
+              "UNRESOLVED_HISTORY",
+              "REJECTED_OR_FALSE_ATTRIBUTION",
+              "OTHER_IDENTITY_OR_DOMAIN_HISTORY",
+              null
+            ]
+          },
           "event_time": {},
           "observed_event": {},
           "participant_interpretation_at_time": {},
@@ -39,11 +51,28 @@
           "privacy_scope": {"type": ["string", "null"]},
           "currentness_rule": {},
           "governed_memory_admission": {},
-          "source_ids": {"type": "array"},
+          "source_ids": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1},
+            "uniqueItems": true
+          },
           "ledger_path": {"type": "string", "minLength": 1},
           "ledger_line": {"type": "integer", "minimum": 1},
-          "amendments": {"type": "array"},
-          "classification_corrections": {"type": "array"},
+          "historical_canon_overlays": {
+            "type": "array",
+            "items": {"type": "object"}
+          },
+          "amendments": {
+            "type": "array",
+            "items": {"type": "object"}
+          },
+          "classification_corrections": {
+            "type": "array",
+            "items": {"type": "object"}
+          },
+          "overlay_privacy_semantics": {
+            "const": "OVERLAY_INHERITS_TARGET_PRIVACY_UNLESS_EXPLICIT_SCOPE_REQUIRES_SEPARATE_AUTHORIZATION"
+          },
           "result_semantics": {
             "const": "HISTORICAL_EVIDENCE_ONLY_NOT_CURRENT_MEMORY_OR_AUTHORITY"
           }
