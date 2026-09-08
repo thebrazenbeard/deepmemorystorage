@@ -13,15 +13,16 @@
   "record_sources":{
     "memories":["ledger/memories.jsonl","ledger/memories_*.jsonl","ledger/memories_pass*.jsonl"],
     "sources":["ledger/sources.jsonl","ledger/sources_*.jsonl","ledger/sources_pass*.jsonl"],
+    "historical_canon_overlays":["ledger/historical_canon*.json"],
     "provenance_amendments":["ledger/provenance_amendments*.jsonl"],
     "classification_corrections":["ledger/classification_corrections*.jsonl"],
     "receipts":["updates/INGEST_PASS_*.json"]
   },
-  "canonical_retrieval_rule":"UNION_ALL_LEDGER_TRANCHES_THEN_APPLY_AMENDMENTS_AND_CLASSIFICATION_CORRECTIONS; ROOT_INDEX_FILES_ARE_LEGACY_CONVENIENCE_ONLY_UNLESS_GENERATED_FROM_THE_CURRENT_UNION",
+  "canonical_retrieval_rule":"UNION_ALL_LEDGER_TRANCHES_THEN_APPLY_HISTORICAL_CANON_OVERLAYS_PROVENANCE_AMENDMENTS_AND_CLASSIFICATION_CORRECTIONS; ROOT_INDEX_FILES_ARE_LEGACY_CONVENIENCE_ONLY_UNLESS_GENERATED_FROM_THE_CURRENT_UNION",
   "retrieval_contract":{
     "mode":"EVIDENCE_SEARCH",
     "result_schema":"schema/DEEP_MEMORY_EVIDENCE_RESULT_V1.schema.json",
-    "privacy_rule":"CALLER_MUST_SUPPLY_EXACT_AUTHORIZED_PRIVACY_SCOPES; EXPLICIT_ARCHIVE_AUDIT_ALL_IS_REPOSITORY_AUDIT_ONLY",
+    "privacy_rule":"CALLER_MUST_SUPPLY_EXACT_AUTHORIZED_PRIVACY_SCOPES; OVERLAYS_INHERIT_TARGET_PRIVACY_UNLESS_AN_EXPLICIT_OVERLAY_SCOPE_REQUIRES_SEPARATE_AUTHORIZATION; EXPLICIT_ARCHIVE_AUDIT_ALL_IS_REPOSITORY_AUDIT_ONLY",
     "required_result_fields":[
       "memory_id",
       "memory_class",
@@ -36,6 +37,7 @@
       "result_semantics"
     ],
     "must_preserve":[
+      "stored_vs_effective_historical_canonicity",
       "event_time_vs_record_time_vs_retrieval_time",
       "historical_canonicity_vs_currentness",
       "memory_class_vs_governed_admission",
@@ -51,7 +53,7 @@
       "resolve_conflicts_by_newest_record_wins",
       "merge_other_identity_or_domain_history_into_Vera_by_similarity",
       "treat_repository_commit_as_runtime_install_or_provider_effect",
-      "return_records_outside_exact_caller_authorized_privacy_scope"
+      "return_records_or_overlay_payloads_outside_exact_caller_authorized_privacy_scope"
     ]
   },
   "architecture_relations":{
@@ -75,12 +77,14 @@
     "architecture_validator":"tools/validate_architecture_binding.py",
     "ci":".github/workflows/deep-memory-architecture-validation.yml",
     "latest_receipt_must_match_unique_memory_union":true,
+    "historical_canon_overlays":"LOAD_APPLY_AND_VALIDATE",
     "duplicate_memory_ids":"FAIL",
     "identical_duplicate_source_ids":"DEDUP_WARN",
     "divergent_duplicate_source_ids":"FAIL_CONFLICT",
     "invalid_jsonl":"FAIL",
     "missing_referenced_source_ids":"REPORT",
     "stale_legacy_root_indexes":"WARN_NOT_CANONICAL",
-    "privacy_without_authorized_scope":"FAIL_CLOSED"
+    "privacy_without_authorized_scope":"FAIL_CLOSED",
+    "overlay_privacy":"INHERIT_TARGET_UNLESS_EXPLICIT_SCOPE_REQUIRES_SEPARATE_AUTHORIZATION"
   }
 }
