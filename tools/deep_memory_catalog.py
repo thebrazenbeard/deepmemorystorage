@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Build and validate the union of all Deep Memory ledger tranches.
 
-This tool is deliberately repository-local and authority-neutral. It validates and
-indexes historical evidence; it never promotes a record to current memory.
+This tool is repository-local and authority-neutral. It validates and indexes
+historical evidence; it never promotes a record to current memory or authority.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ LEDGER = ROOT / "ledger"
 UPDATES = ROOT / "updates"
 
 
-def _jsonl(path: Path) -> list[dict[str, Any]]:
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as fh:
         for lineno, raw in enumerate(fh, 1):
@@ -41,20 +41,20 @@ def _jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _matching(prefix: str) -> list[Path]:
-    return sorted(p for p in LEDGER.glob(f"{prefix}*.jsonl") if p.is_file())
+def matching(prefix: str) -> list[Path]:
+    return sorted(path for path in LEDGER.glob(f"{prefix}*.jsonl") if path.is_file())
 
 
-def _latest_receipt() -> tuple[Path | None, dict[str, Any] | None]:
-    receipts: list[tuple[int, Path]] = []
+def latest_receipt() -> tuple[Path | None, dict[str, Any] | None]:
+    candidates: list[tuple[int, Path]] = []
     rx = re.compile(r"INGEST_PASS_(\d+)\.json$")
     for path in UPDATES.glob("INGEST_PASS_*.json"):
-        m = rx.search(path.name)
-        if m:
-            receipts.append((int(m.group(1)), path))
-    if not receipts:
+        match = rx.search(path.name)
+        if match:
+            candidates.append((int(match.group(1)), path))
+    if not candidates:
         return None, None
-    _, path = max(receipts, key=lambda item: item[0])
+    _, path = max(candidates, key=lambda item: item[0])
     with path.open("r", encoding="utf-8") as fh:
         obj = json.load(fh)
     if not isinstance(obj, dict):
@@ -62,58 +62,58 @@ def _latest_receipt() -> tuple[Path | None, dict[str, Any] | None]:
     return path, obj
 
 
-def _sha256_lines(rows: Iterable[dict[str, Any]]) -> str:
-    h = hashlib.sha256()
+def sha256_rows(rows: Iterable[dict[str, Any]]) -> str:
+    digest = hashlib.sha256()
     for row in rows:
-        clean = {k: v for k, v in row.items() if not k.startswith("__")}
-        h.update(json.dumps(clean, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
-        h.update(b"\n")
-    return h.hexdigest()
+        clean = {key: value for key, value in row.items() if not key.startswith("__")}
+        digest.update(json.dumps(clean, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
+        digest.update(b"\n")
+    return digest.hexdigest()
 
 
 def load_union() -> dict[str, Any]:
-    memory_paths = _matching("memories")
-    source_paths = _matching("sources")
-    amendment_paths = _matching("provenance_amendments")
-    correction_paths = _matching("classification_corrections")
+    memory_paths = matching("memories")
+    source_paths = matching("sources")
+    amendment_paths = matching("provenance_amendments")
+    correction_paths = matching("classification_corrections")
 
-    memories = [row for path in memory_paths for row in _jsonl(path)]
-    sources = [row for path in source_paths for row in _jsonl(path)]
-    amendments = [row for path in amendment_paths for row in _jsonl(path)]
-    corrections = [row for path in correction_paths for row in _jsonl(path)]
+    memories = [row for path in memory_paths for row in read_jsonl(path)]
+    sources = [row for path in source_paths for row in read_jsonl(path)]
+    amendments = [row for path in amendment_paths for row in read_jsonl(path)]
+    corrections = [row for path in correction_paths for row in read_jsonl(path)]
 
     errors: list[str] = []
     warnings: list[str] = []
 
     memory_by_id: dict[str, dict[str, Any]] = {}
     for row in memories:
-        mid = row.get("memory_id")
-        if not isinstance(mid, str) or not mid:
+        memory_id = row.get("memory_id")
+        if not isinstance(memory_id, str) or not memory_id:
             errors.append(f"{row['__ledger_path']}:{row['__ledger_line']}: missing memory_id")
             continue
-        if mid in memory_by_id:
-            prev = memory_by_id[mid]
+        if memory_id in memory_by_id:
+            prior = memory_by_id[memory_id]
             errors.append(
-                f"duplicate memory_id {mid}: {prev['__ledger_path']}:{prev['__ledger_line']} and "
+                f"duplicate memory_id {memory_id}: {prior['__ledger_path']}:{prior['__ledger_line']} and "
                 f"{row['__ledger_path']}:{row['__ledger_line']}"
             )
         else:
-            memory_by_id[mid] = row
+            memory_by_id[memory_id] = row
 
     source_by_id: dict[str, dict[str, Any]] = {}
     for row in sources:
-        sid = row.get("source_id")
-        if not isinstance(sid, str) or not sid:
+        source_id = row.get("source_id")
+        if not isinstance(source_id, str) or not source_id:
             warnings.append(f"{row['__ledger_path']}:{row['__ledger_line']}: source row without source_id")
             continue
-        if sid in source_by_id:
-            prev = source_by_id[sid]
+        if source_id in source_by_id:
+            prior = source_by_id[source_id]
             errors.append(
-                f"duplicate source_id {sid}: {prev['__ledger_path']}:{prev['__ledger_line']} and "
+                f"duplicate source_id {source_id}: {prior['__ledger_path']}:{prior['__ledger_line']} and "
                 f"{row['__ledger_path']}:{row['__ledger_line']}"
             )
         else:
-            source_by_id[sid] = row
+            source_by_id[source_id] = row
 
     amendments_by_target: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in amendments:
@@ -136,26 +136,26 @@ def load_union() -> dict[str, Any]:
             warnings.append(f"{row['__ledger_path']}:{row['__ledger_line']}: classification correction without target")
 
     missing_source_refs: list[str] = []
-    for mid, row in memory_by_id.items():
-        refs = row.get("source_ids") or []
-        if not isinstance(refs, list):
-            warnings.append(f"{mid}: source_ids is not a list")
+    for memory_id, row in memory_by_id.items():
+        source_ids = row.get("source_ids") or []
+        if not isinstance(source_ids, list):
+            warnings.append(f"{memory_id}: source_ids is not a list")
             continue
-        for sid in refs:
-            if isinstance(sid, str) and sid and sid not in source_by_id:
-                missing_source_refs.append(f"{mid}->{sid}")
+        for source_id in source_ids:
+            if isinstance(source_id, str) and source_id and source_id not in source_by_id:
+                missing_source_refs.append(f"{memory_id}->{source_id}")
     if missing_source_refs:
         warnings.append(
-            "missing referenced source ids (may be historical external bindings): "
+            "missing referenced source ids (may be intentional external historical bindings): "
             + ", ".join(sorted(missing_source_refs)[:50])
             + (" ..." if len(missing_source_refs) > 50 else "")
         )
 
     catalog: list[dict[str, Any]] = []
-    for mid in sorted(memory_by_id):
-        row = memory_by_id[mid]
-        entry = {
-            "memory_id": mid,
+    for memory_id in sorted(memory_by_id):
+        row = memory_by_id[memory_id]
+        catalog.append({
+            "memory_id": memory_id,
             "memory_class": row.get("memory_class"),
             "historical_canonicity": row.get("historical_canonicity"),
             "event_time": row.get("event_time"),
@@ -172,14 +172,14 @@ def load_union() -> dict[str, Any]:
             "event_fingerprint": row.get("event_fingerprint"),
             "ledger_path": row["__ledger_path"],
             "ledger_line": row["__ledger_line"],
-            "amendment_ids": [a.get("amendment_id") for a in amendments_by_target.get(mid, [])],
+            "amendment_ids": [item.get("amendment_id") for item in amendments_by_target.get(memory_id, [])],
             "classification_correction_ids": [
-                c.get("correction_id") or c.get("amendment_id") for c in corrections_by_target.get(mid, [])
+                item.get("correction_id") or item.get("amendment_id")
+                for item in corrections_by_target.get(memory_id, [])
             ],
-        }
-        catalog.append(entry)
+        })
 
-    receipt_path, receipt = _latest_receipt()
+    receipt_path, receipt = latest_receipt()
     expected_count = None
     latest_pass_id = None
     if receipt:
@@ -208,13 +208,13 @@ def load_union() -> dict[str, Any]:
         "source_count": len(source_by_id),
         "amendment_count": len(amendments),
         "classification_correction_count": len(corrections),
-        "catalog_digest_sha256": _sha256_lines(catalog),
-        "memory_paths": [str(p.relative_to(ROOT)) for p in memory_paths],
-        "source_paths": [str(p.relative_to(ROOT)) for p in source_paths],
+        "catalog_digest_sha256": sha256_rows(catalog),
+        "memory_paths": [str(path.relative_to(ROOT)) for path in memory_paths],
+        "source_paths": [str(path.relative_to(ROOT)) for path in source_paths],
     }
 
 
-def manifest(union: dict[str, Any]) -> dict[str, Any]:
+def build_manifest(union: dict[str, Any]) -> dict[str, Any]:
     return {
         "schema": "VERA_DEEP_MEMORY_CORPUS_MANIFEST_V1",
         "role": "HISTORICAL_EVIDENCE_PLANE",
@@ -232,10 +232,10 @@ def manifest(union: dict[str, Any]) -> dict[str, Any]:
             "errors": union["errors"],
             "warnings": union["warnings"],
             "latest_receipt_expected_rows": union["latest_receipt_expected_rows"],
-            "latest_receipt_matches_union": not any("latest receipt" in e for e in union["errors"]),
+            "latest_receipt_matches_union": not any("latest receipt" in error for error in union["errors"]),
         },
         "nonpromotion": {
-            "current_authority": false if False else False,
+            "current_authority": False,
             "automatic_current_memory_admission": False,
             "automatic_r9b0_promotion": False,
         },
@@ -244,25 +244,24 @@ def manifest(union: dict[str, Any]) -> dict[str, Any]:
 
 def write_outputs(union: dict[str, Any], output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-    cat_path = output_dir / "retrieval_catalog.jsonl"
-    with cat_path.open("w", encoding="utf-8") as fh:
+    with (output_dir / "retrieval_catalog.jsonl").open("w", encoding="utf-8") as fh:
         for row in union["catalog"]:
             fh.write(json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n")
     with (output_dir / "corpus_manifest.json").open("w", encoding="utf-8") as fh:
-        json.dump(manifest(union), fh, indent=2, sort_keys=True, ensure_ascii=False)
+        json.dump(build_manifest(union), fh, indent=2, sort_keys=True, ensure_ascii=False)
         fh.write("\n")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Validate and catalog the complete Deep Memory ledger union")
     parser.add_argument("--validate", action="store_true", help="validate the full ledger union")
-    parser.add_argument("--write-output", type=Path, help="write a consolidated catalog/manifest to this directory")
+    parser.add_argument("--write-output", type=Path, help="write consolidated catalog and manifest to a directory")
     parser.add_argument("--json", action="store_true", help="emit validation summary as JSON")
     args = parser.parse_args()
 
     try:
         union = load_union()
-    except Exception as exc:  # fail closed on parse/integrity errors
+    except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
@@ -279,6 +278,7 @@ def main() -> int:
         "errors": union["errors"],
         "warnings": union["warnings"],
     }
+
     if args.json:
         print(json.dumps(summary, indent=2, sort_keys=True, ensure_ascii=False))
     else:
