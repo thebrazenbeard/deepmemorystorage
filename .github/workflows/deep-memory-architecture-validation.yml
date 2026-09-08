@@ -61,6 +61,16 @@ jobs:
           python tools/deep_memory_catalog.py --write-output /tmp/deep-memory-catalog --json
           test -s /tmp/deep-memory-catalog/retrieval_catalog.jsonl
           test -s /tmp/deep-memory-catalog/corpus_manifest.json
+      - name: Prove catalog carries effective overlay provenance
+        run: |
+          python - <<'PY'
+          import json
+          rows = [json.loads(line) for line in open('/tmp/deep-memory-catalog/retrieval_catalog.jsonl', encoding='utf-8') if line.strip()]
+          row = next(item for item in rows if item['memory_id'] == 'WORK-BUS-RADAR-CENTRAL-RECONCILIATION-0906')
+          assert 'stored_source_ids' in row
+          assert 'SRC-BUS-RADAR-NODE-ROUTING-HARDENING-0906-P36' in row['source_ids'], row
+          assert 'SRC-BUS-RADAR-NODE-ROUTING-HARDENING-0906-P36' not in row['stored_source_ids'], row
+          PY
       - name: Prove query privacy fails closed
         shell: bash
         run: |
