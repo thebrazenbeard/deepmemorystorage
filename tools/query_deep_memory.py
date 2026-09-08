@@ -3,6 +3,8 @@
 
 The output intentionally carries provenance/currentness boundaries. This tool does
 not admit current memory, select current relationship state, or authorize action.
+Privacy is fail-closed: callers must provide exact authorized scopes or invoke the
+explicit repository-audit mode.
 """
 
 from __future__ import annotations
@@ -13,6 +15,9 @@ import sys
 from typing import Any
 
 from deep_memory_catalog import load_union
+
+RESULT_SCHEMA = "VERA_DEEP_MEMORY_EVIDENCE_RESULT_V1"
+RESULT_SEMANTICS = "HISTORICAL_EVIDENCE_ONLY_NOT_CURRENT_MEMORY_OR_AUTHORITY"
 
 
 def _text(value: Any) -> str:
@@ -31,7 +36,7 @@ def _score(row: dict[str, Any], query: str) -> int:
     q = query.casefold().strip()
     if not q:
         return 1
-    tokens = [t for t in q.split() if t]
+    tokens = [token for token in q.split() if token]
     fields = {
         "id": _text(row.get("memory_id")).casefold(),
         "aliases": _text(row.get("retrieval_aliases")).casefold(),
@@ -76,10 +81,29 @@ def main() -> int:
     parser.add_argument("query", nargs="?", default="")
     parser.add_argument("--memory-class")
     parser.add_argument("--historical-canonicity")
-    parser.add_argument("--privacy-scope")
+    parser.add_argument(
+        "--authorized-privacy",
+        action="append",
+        default=[],
+        metavar="SCOPE",
+        help="exact privacy scope authorized for this retrieval; repeatable",
+    )
+    parser.add_argument(
+        "--audit-all-privacy",
+        action="store_true",
+        help="explicit repository-audit mode; bypasses privacy filtering inside the private archive",
+    )
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
+
+    if args.audit_all_privacy and args.authorized_privacy:
+        parser.error("--audit-all-privacy may not be combined with --authorized-privacy")
+    if not args.audit_all_privacy and not args.authorized_privacy:
+        parser.error("provide at least one --authorized-privacy SCOPE or explicitly use --audit-all-privacy")
+
+    authorized_privacy = set(args.authorized_privacy)
+    privacy_mode = "EXPLICIT_ARCHIVE_AUDIT_ALL" if args.audit_all_privacy else "AUTHORIZED_SCOPE_FILTER"
 
     union = load_union()
     if union["errors"]:
@@ -87,36 +111,38 @@ def main() -> int:
             print(f"ERROR: {error}", file=sys.stderr)
         return 2
 
-    amendments = {}
+    amendments: dict[str, list[dict[str, Any]]] = {}
     for row in union["amendments"]:
         target = row.get("target_memory_id")
-        if target:
+        if isinstance(target, str) and target:
             amendments.setdefault(target, []).append(row)
-    corrections = {}
+    corrections: dict[str, list[dict[str, Any]]] = {}
     for row in union["corrections"]:
         target = row.get("target_memory_id") or row.get("memory_id")
-        if target:
+        if isinstance(target, str) and target:
             corrections.setdefault(target, []).append(row)
 
-    hits = []
-    for mid, row in union["memory_by_id"].items():
+    hits: list[tuple[int, str, dict[str, Any]]] = []
+    for memory_id, row in union["memory_by_id"].items():
+        privacy_scope = row.get("privacy_scope")
+        if not args.audit_all_privacy:
+            if not isinstance(privacy_scope, str) or privacy_scope not in authorized_privacy:
+                continue
         if args.memory_class and row.get("memory_class") != args.memory_class:
             continue
         if args.historical_canonicity and row.get("historical_canonicity") != args.historical_canonicity:
             continue
-        if args.privacy_scope and row.get("privacy_scope") != args.privacy_scope:
-            continue
         score = _score(row, args.query)
         if score <= 0:
             continue
-        hits.append((score, mid, row))
+        hits.append((score, memory_id, row))
 
     hits.sort(key=lambda item: (-item[0], _text(item[2].get("event_time")), item[1]))
-    results = []
-    for score, mid, row in hits[: max(0, args.limit)]:
+    results: list[dict[str, Any]] = []
+    for score, memory_id, row in hits[: max(0, args.limit)]:
         results.append({
             "score": score,
-            "memory_id": mid,
+            "memory_id": memory_id,
             "memory_class": row.get("memory_class"),
             "historical_canonicity": row.get("historical_canonicity"),
             "event_time": row.get("event_time"),
@@ -132,25 +158,40 @@ def main() -> int:
             "ledger_path": row.get("__ledger_path"),
             "ledger_line": row.get("__ledger_line"),
             "amendments": [
-                {k: v for k, v in amendment.items() if not k.startswith("__")}
-                for amendment in amendments.get(mid, [])
+                {key: value for key, value in amendment.items() if not key.startswith("__")}
+                for amendment in amendments.get(memory_id, [])
             ],
             "classification_corrections": [
-                {k: v for k, v in correction.items() if not k.startswith("__")}
-                for correction in corrections.get(mid, [])
+                {key: value for key, value in correction.items() if not key.startswith("__")}
+                for correction in corrections.get(memory_id, [])
             ],
-            "result_semantics": "HISTORICAL_EVIDENCE_ONLY_NOT_CURRENT_MEMORY_OR_AUTHORITY",
+            "result_semantics": RESULT_SEMANTICS,
         })
 
+    envelope = {
+        "schema": RESULT_SCHEMA,
+        "query": args.query,
+        "privacy_mode": privacy_mode,
+        "authorized_privacy_scopes": sorted(authorized_privacy),
+        "count": len(results),
+        "results": results,
+    }
+
     if args.json:
-        print(json.dumps({"query": args.query, "count": len(results), "results": results}, indent=2, ensure_ascii=False))
+        print(json.dumps(envelope, indent=2, ensure_ascii=False))
     else:
+        print(f"privacy_mode={privacy_mode}")
+        if authorized_privacy:
+            print("authorized_privacy_scopes=" + ",".join(sorted(authorized_privacy)))
         for item in results:
-            print(f"[{item['score']:>3}] {item['memory_id']} | {item.get('event_time')} | {item.get('historical_canonicity')}")
+            print(
+                f"[{item['score']:>3}] {item['memory_id']} | {item.get('event_time')} | "
+                f"{item.get('historical_canonicity')}"
+            )
             event = item.get("observed_event") or ""
-            print(f"      {event[:400]}")
+            print(f"      {str(event)[:400]}")
             print(f"      source={item.get('ledger_path')} privacy={item.get('privacy_scope')}")
-            print("      HISTORICAL_EVIDENCE_ONLY_NOT_CURRENT_MEMORY_OR_AUTHORITY")
+            print(f"      {RESULT_SEMANTICS}")
     return 0
 
 
