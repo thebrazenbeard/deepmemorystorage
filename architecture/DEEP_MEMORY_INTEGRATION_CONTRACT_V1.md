@@ -64,14 +64,18 @@ Consumers must:
 2. reject duplicate `memory_id` collisions;
 3. retain the original ledger path for every record;
 4. load source records;
-5. apply append-only provenance amendments as overlays, never destructive rewrites;
-6. apply append-only historical-canon classification corrections as overlays;
-7. retain unresolved conflicts and limitations;
-8. use pass-specific semantic indexes as aids, not as the authoritative corpus boundary.
+5. load append-only historical-canon overlays such as `ledger/historical_canon_pass10.json` and apply them to the targeted legacy rows;
+6. apply append-only provenance amendments as overlays, never destructive rewrites;
+7. apply append-only historical-canon classification corrections as overlays;
+8. retain both the stored/base historical-canonicity value and the effective value when an overlay or correction supplies the latter;
+9. retain unresolved conflicts and limitations;
+10. use pass-specific semantic indexes as aids, not as the authoritative corpus boundary.
+
+This distinction is material: Pass 010 classified 79 preexisting bounded rows through an append-only historical-canon overlay rather than rewriting those rows. A retrieval implementation that reads only the base row therefore produces a false `null`/legacy classification and is incomplete.
 
 `tools/deep_memory_catalog.py` implements this union/validation rule for repository-local consumers.
 
-`tools/query_deep_memory.py` provides a bounded retrieval interface over the union.
+`tools/query_deep_memory.py` provides a bounded retrieval interface over the union. Query scoring includes authorized amendment/correction text so later provenance improvements are discoverable even when the original memory row predates the new terminology.
 
 ## Retrieval result contract
 
@@ -81,15 +85,17 @@ Every historical result retains at least:
 
 - `memory_id`;
 - `memory_class`;
-- `historical_canonicity`;
+- effective `historical_canonicity`;
+- stored/base `stored_historical_canonicity` when different or absent;
+- historical-canon overlay metadata when applicable;
 - `event_time`;
-- `source_ids`;
+- effective `source_ids`, including visible amendment/correction provenance;
 - `privacy_scope`;
 - `provenance_ceiling`;
 - `currentness_rule`;
 - `governed_memory_admission` when present;
 - `ledger_path`;
-- matching amendment/correction identifiers;
+- matching amendment/correction payloads permitted by the caller's privacy scope;
 - `result_semantics = HISTORICAL_EVIDENCE_ONLY_NOT_CURRENT_MEMORY_OR_AUTHORITY`.
 
 A consumer may summarize the content, but must not discard these boundaries when they are material to the claim.
@@ -99,6 +105,8 @@ A consumer may summarize the content, but must not discard these boundaries when
 Privacy travels with the record and retrieval is fail-closed.
 
 An ordinary architecture-facing query must receive exact caller-authorized privacy scopes and may return only records whose `privacy_scope` is included in that authorized set. Absence of privacy authorization is an error, not permission to search the full archive.
+
+Overlay privacy is also fail-closed. A historical-canon overlay, provenance amendment, or classification correction inherits its target memory's privacy scope unless the overlay declares an explicit scope. An explicit overlay scope requires separate authorization for that scope; authorization to the base memory does not authorize a narrower or different overlay payload.
 
 The repository query tool also exposes an explicit `--audit-all-privacy` mode. That mode exists only for a deliberate audit performed inside the private archive. It is not a runtime default and must never be substituted silently for caller authorization.
 
@@ -172,12 +180,16 @@ Architecture integration is considered healthy when repository CI proves at mini
 
 - every memory tranche parses as JSONL;
 - `memory_id` values are globally unique;
+- historical-canon overlay files parse, target existing rows, and preserve their declared assignment counts;
+- effective historical canonicity incorporates the Pass-010 legacy overlay and exact later correction classes;
 - identical source-ID restatements are distinguished from divergent source-ID conflicts;
 - the union row count matches the latest completed ingest receipt when that receipt exposes an aggregate row count;
 - source/amendment/correction files parse;
-- referenced source IDs are reported when missing;
+- referenced source IDs from memories, amendments, and corrections are reported when missing;
 - the retrieval/query tools can enumerate the union;
 - query privacy fails closed without exact scope authorization;
+- overlay payloads inherit target privacy unless an explicit overlay scope requires separate authorization;
+- query scoring can discover authorized amendment/correction-only terminology;
 - query results carry the defined evidence-result envelope and nonpromotion semantics;
 - no validator treats the legacy root indexes as the corpus boundary.
 
