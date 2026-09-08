@@ -70,6 +70,37 @@ jobs:
           set -e
           test "$code" -ne 0
           grep -q "authorized-privacy\|audit-all-privacy" /tmp/privacy-err
+      - name: Prove restricted classification overlays do not leak conclusions
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, 'tools')
+          from query_deep_memory import _visible_effective_canonicity, _visible_overlay_rows
+
+          base = {'historical_canonicity': 'UNRESOLVED_HISTORY', 'privacy_scope': 'BASE'}
+          restricted = [{
+              'correction_id': 'TEST',
+              'corrected_historical_canonicity': 'CANONICAL_HISTORY',
+              'privacy_scope': 'RESTRICTED',
+          }]
+          hidden = _visible_overlay_rows(
+              restricted,
+              target_privacy_scope='BASE',
+              audit_all_privacy=False,
+              authorized_privacy={'BASE'},
+          )
+          assert hidden == []
+          assert _visible_effective_canonicity(base, [], hidden) == 'UNRESOLVED_HISTORY'
+
+          visible = _visible_overlay_rows(
+              restricted,
+              target_privacy_scope='BASE',
+              audit_all_privacy=False,
+              authorized_privacy={'BASE', 'RESTRICTED'},
+          )
+          assert len(visible) == 1
+          assert _visible_effective_canonicity(base, [], visible) == 'CANONICAL_HISTORY'
+          PY
       - name: Prove Pass-010 historical-canon overlay is effective
         run: |
           python tools/query_deep_memory.py "AUTO-EARLY-001" --audit-all-privacy --historical-canonicity CANONICAL_HISTORY --limit 5 --json > /tmp/legacy-overlay.json
