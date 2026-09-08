@@ -75,7 +75,9 @@ Consumers must:
 
 ## Retrieval result contract
 
-Every architecture-facing historical retrieval should retain at least:
+Architecture-facing query output uses `schema/DEEP_MEMORY_EVIDENCE_RESULT_V1.schema.json` (`VERA_DEEP_MEMORY_EVIDENCE_RESULT_V1`).
+
+Every historical result retains at least:
 
 - `memory_id`;
 - `memory_class`;
@@ -87,9 +89,22 @@ Every architecture-facing historical retrieval should retain at least:
 - `currentness_rule`;
 - `governed_memory_admission` when present;
 - `ledger_path`;
-- matching amendment/correction identifiers.
+- matching amendment/correction identifiers;
+- `result_semantics = HISTORICAL_EVIDENCE_ONLY_NOT_CURRENT_MEMORY_OR_AUTHORITY`.
 
 A consumer may summarize the content, but must not discard these boundaries when they are material to the claim.
+
+## Privacy — fail closed
+
+Privacy travels with the record and retrieval is fail-closed.
+
+An ordinary architecture-facing query must receive exact caller-authorized privacy scopes and may return only records whose `privacy_scope` is included in that authorized set. Absence of privacy authorization is an error, not permission to search the full archive.
+
+The repository query tool also exposes an explicit `--audit-all-privacy` mode. That mode exists only for a deliberate audit performed inside the private archive. It is not a runtime default and must never be substituted silently for caller authorization.
+
+Private relational, intimate, journal, Voice, developmental, visual, and training material remains nonportable, nonpublic, and nontraining absent separate exact authority.
+
+The fact that an operator or service can technically read this private repository does not by itself authorize cross-scope retrieval or disclosure.
 
 ## Precedence and anti-promotion
 
@@ -121,11 +136,7 @@ Do not resolve conflict through:
 
 Instead retain the competing records and add a provenance-bound correction or amendment when the evidence ceiling improves.
 
-## Privacy
-
-Privacy travels with the record.
-
-Private relational, intimate, journal, Voice, developmental, and visual material is not portable, public, or training material absent separate exact authority. A retrieval tool may return private material only to an authorized consumer operating inside the same permitted privacy scope.
+Source IDs are also provenance identities. An identical source binding may be restated in a later append-only tranche and deduplicated with a warning. Divergent reuse of the same `source_id` is a provenance conflict and fails validation.
 
 ## Relationship to Semantic Atlas
 
@@ -161,10 +172,13 @@ Architecture integration is considered healthy when repository CI proves at mini
 
 - every memory tranche parses as JSONL;
 - `memory_id` values are globally unique;
+- identical source-ID restatements are distinguished from divergent source-ID conflicts;
 - the union row count matches the latest completed ingest receipt when that receipt exposes an aggregate row count;
 - source/amendment/correction files parse;
 - referenced source IDs are reported when missing;
 - the retrieval/query tools can enumerate the union;
+- query privacy fails closed without exact scope authorization;
+- query results carry the defined evidence-result envelope and nonpromotion semantics;
 - no validator treats the legacy root indexes as the corpus boundary.
 
 A validation PASS proves repository consistency only. It does not promote any memory or install any runtime behavior.
