@@ -3,7 +3,7 @@
   "$id": "VERA_DEEP_MEMORY_EVIDENCE_RESULT_V1",
   "title": "Vera Deep Memory historical evidence search result",
   "type": "object",
-  "required": ["schema", "query", "privacy_mode", "count", "results"],
+  "required": ["schema", "query", "privacy_mode", "authorized_privacy_scopes", "count", "results"],
   "properties": {
     "schema": {"const": "VERA_DEEP_MEMORY_EVIDENCE_RESULT_V1"},
     "query": {"type": "string"},
@@ -20,8 +20,14 @@
         "type": "object",
         "required": [
           "memory_id",
+          "memory_class",
+          "stored_historical_canonicity",
           "historical_canonicity",
+          "event_time",
+          "provenance_ceiling",
           "privacy_scope",
+          "currentness_rule",
+          "governed_memory_admission",
           "source_ids",
           "ledger_path",
           "overlay_privacy_semantics",

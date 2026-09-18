@@ -143,7 +143,15 @@ jobs:
           assert data.get('privacy_mode') == 'EXPLICIT_ARCHIVE_AUDIT_ALL'
           assert isinstance(data.get('results'), list)
           assert data['results'], 'expected at least one bounded historical result'
+          required = {
+              'memory_id', 'memory_class', 'stored_historical_canonicity', 'historical_canonicity',
+              'event_time', 'provenance_ceiling', 'privacy_scope', 'currentness_rule',
+              'governed_memory_admission', 'source_ids', 'ledger_path',
+              'overlay_privacy_semantics', 'result_semantics',
+          }
+          assert 'authorized_privacy_scopes' in data
           for row in data['results']:
+              assert required <= set(row), sorted(required - set(row))
               assert row.get('result_semantics') == 'HISTORICAL_EVIDENCE_ONLY_NOT_CURRENT_MEMORY_OR_AUTHORITY'
               assert row.get('overlay_privacy_semantics') == 'OVERLAY_INHERITS_TARGET_PRIVACY_UNLESS_EXPLICIT_SCOPE_REQUIRES_SEPARATE_AUTHORIZATION'
               assert row.get('ledger_path')

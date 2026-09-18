@@ -52,7 +52,15 @@ def main() -> int:
     assert RESULT_SCHEMA.is_file()
     schema = json.loads(RESULT_SCHEMA.read_text(encoding="utf-8"))
     assert schema["$id"] == "VERA_DEEP_MEMORY_EVIDENCE_RESULT_V1"
-    result_properties = schema["properties"]["results"]["items"]["properties"]
+    assert "authorized_privacy_scopes" in schema["required"]
+    result_item_schema = schema["properties"]["results"]["items"]
+    schema_required = set(result_item_schema["required"])
+    binding_required = set(retrieval["required_result_fields"])
+    assert binding_required <= schema_required, sorted(binding_required - schema_required)
+    assert "stored_historical_canonicity" in schema_required
+    invalid_probe = {field: None for field in schema_required if field != "provenance_ceiling"}
+    assert schema_required.difference(invalid_probe) == {"provenance_ceiling"}
+    result_properties = result_item_schema["properties"]
     assert result_properties["result_semantics"]["const"] == "HISTORICAL_EVIDENCE_ONLY_NOT_CURRENT_MEMORY_OR_AUTHORITY"
     assert result_properties["overlay_privacy_semantics"]["const"].startswith("OVERLAY_INHERITS_TARGET_PRIVACY")
     assert "stored_historical_canonicity" in result_properties
