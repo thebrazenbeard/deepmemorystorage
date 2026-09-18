@@ -92,7 +92,10 @@
     "latest_receipt_exact_lineage_requires_corpus_subject_digest":true,
     "latest_receipt_row_count_match_is_not_exact_lineage":true,
     "receipt_predecessor_chain":"FAIL_CLOSED_IF_UNRESOLVED",
+    "receipt_continues_policy":"IMMEDIATE_NUMERIC_PREDECESSOR_ONLY",
+    "receipt_path_identity":"FILENAME_STEM_MUST_EQUAL_PASS_ID",
     "workflow_external_actions":"IMMUTABLE_COMMIT_SHA_ONLY",
+    "workflow_external_action_ref_scan":"ALL_EXTERNAL_USES_REFS_MUST_MATCH_PIN_REGISTRY",
     "external_action_pins":{
       "actions/checkout":"11d5960a326750d5838078e36cf38b85af677262",
       "actions/setup-python":"a26af69be951a213d495a4c3e4e4022e16d87065",

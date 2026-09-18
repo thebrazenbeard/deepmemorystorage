@@ -189,7 +189,7 @@ Architecture integration is considered healthy when repository CI proves at mini
 - effective historical canonicity incorporates the Pass-010 legacy overlay and exact later correction classes;
 - identical source-ID restatements are distinguished from divergent source-ID conflicts;
 - the union row count matches the latest completed ingest receipt when that receipt exposes an aggregate row count;
-- the latest receipt's declared predecessor chain resolves without a missing target or cycle;
+- the latest receipt's filename stem must equal its internal `pass_id`, and every pass after `INGEST_PASS_001` must name the immediately preceding numeric pass in `continues`; skipped/forked predecessors, missing targets, malformed IDs, and cycles fail closed;
 - an exact canonical digest is recomputed over the complete memory/source/amendment/correction/historical-overlay union; row-count agreement alone is reported as `ROW_COUNT_MATCH` and MUST NOT be described as exact ingest lineage;
 - `CORPUS_SUBJECT_MATCH` is available only when the receipt explicitly binds the recomputed union-subject digest and it matches exactly;
 - source/amendment/correction files parse;
@@ -199,7 +199,7 @@ Architecture integration is considered healthy when repository CI proves at mini
 - overlay payloads inherit target privacy unless an explicit overlay scope requires separate authorization;
 - query scoring can discover authorized amendment/correction-only terminology;
 - query results carry the defined evidence-result envelope, chronology separation, and nonpromotion semantics;
-- external GitHub Actions used by the validation workflow are pinned to immutable 40-character commit SHAs and the architecture validator rejects floating `@vN` action refs;
+- every external GitHub Action referenced by any workflow `uses:` declaration is pinned to an immutable 40-character commit SHA, and the observed action-name/pin set must exactly match the architecture pin registry; local `./` actions are the only unpinned `uses:` form allowed by this validator;
 - no validator treats the legacy root indexes as the corpus boundary.
 
 A validation PASS proves repository consistency only. It does not promote any memory or install any runtime behavior.

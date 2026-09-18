@@ -139,17 +139,30 @@ def receipt_chain_status(receipt_path: Path | None, receipt: dict[str, Any] | No
     current = receipt
     while True:
         pass_id = current.get("pass_id")
-        if not isinstance(pass_id, str) or not re.fullmatch(r"INGEST_PASS_\d+", pass_id):
+        match = re.fullmatch(r"INGEST_PASS_(\d+)", pass_id) if isinstance(pass_id, str) else None
+        if match is None:
             return "INVALID_PASS_ID", chain
+        if current_path.stem != pass_id:
+            return "RECEIPT_PATH_ID_MISMATCH", chain + [pass_id]
         if pass_id in visited:
             return "CYCLE_DETECTED", chain + [pass_id]
         visited.add(pass_id)
         chain.append(pass_id)
+        pass_number = int(match.group(1))
+        if pass_number < 1:
+            return "INVALID_PASS_ID", chain
         continues = current.get("continues")
+        if pass_number == 1:
+            if continues is None:
+                return "CHAIN_RESOLVES", chain
+            return "ROOT_CONTINUES_INVALID", chain
+        expected_predecessor = f"INGEST_PASS_{pass_number - 1:03d}"
         if continues is None:
-            return "CHAIN_RESOLVES", chain
+            return "NON_IMMEDIATE_PREDECESSOR", chain
         if not isinstance(continues, str) or not re.fullmatch(r"INGEST_PASS_\d+", continues):
             return "INVALID_CONTINUES", chain
+        if continues != expected_predecessor:
+            return "NON_IMMEDIATE_PREDECESSOR", chain
         predecessor_path = UPDATES / f"{continues}.json"
         if not predecessor_path.is_file():
             return "PREDECESSOR_MISSING", chain
@@ -158,7 +171,6 @@ def receipt_chain_status(receipt_path: Path | None, receipt: dict[str, Any] | No
             return "PREDECESSOR_ID_MISMATCH", chain
         current_path = predecessor_path
         current = predecessor
-
 
 def receipt_union_match_status(receipt: dict[str, Any] | None, *, row_count: int, union_digest: str) -> str:
     if receipt is None:

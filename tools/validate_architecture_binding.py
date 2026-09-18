@@ -17,6 +17,27 @@ RESULT_SCHEMA = ROOT / "schema/DEEP_MEMORY_EVIDENCE_RESULT_V1.schema.json"
 WORKFLOW = ROOT / ".github/workflows/deep-memory-architecture-validation.yml"
 
 
+def _external_action_pins(workflow_text: str) -> dict[str, str]:
+    pins: dict[str, str] = {}
+    for line in workflow_text.splitlines():
+        match = re.match(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)", line)
+        if match is None:
+            continue
+        ref = match.group(1).strip("\"'")
+        if ref.startswith("./"):
+            continue
+        if "@" not in ref:
+            raise AssertionError(f"external action ref is unpinned: {ref}")
+        action, pin = ref.rsplit("@", 1)
+        if not action or re.fullmatch(r"[0-9a-f]{40}", pin) is None:
+            raise AssertionError(f"external action ref is not immutable: {ref}")
+        prior = pins.get(action)
+        if prior is not None and prior != pin:
+            raise AssertionError(f"external action uses multiple pins: {action}")
+        pins[action] = pin
+    return pins
+
+
 def main() -> int:
     data = json.loads(BINDING.read_text(encoding="utf-8"))
     assert data["schema"] == "VERA_DEEP_MEMORY_ARCHITECTURE_BINDING_V1"
@@ -54,7 +75,10 @@ def main() -> int:
     assert data["validation"]["latest_receipt_exact_lineage_requires_corpus_subject_digest"] is True
     assert data["validation"]["latest_receipt_row_count_match_is_not_exact_lineage"] is True
     assert data["validation"]["receipt_predecessor_chain"] == "FAIL_CLOSED_IF_UNRESOLVED"
+    assert data["validation"]["receipt_continues_policy"] == "IMMEDIATE_NUMERIC_PREDECESSOR_ONLY"
+    assert data["validation"]["receipt_path_identity"] == "FILENAME_STEM_MUST_EQUAL_PASS_ID"
     assert data["validation"]["workflow_external_actions"] == "IMMUTABLE_COMMIT_SHA_ONLY"
+    assert data["validation"]["workflow_external_action_ref_scan"] == "ALL_EXTERNAL_USES_REFS_MUST_MATCH_PIN_REGISTRY"
     assert "APPLY_HISTORICAL_CANON_OVERLAYS" in data["canonical_retrieval_rule"]
 
     assert CONTRACT.is_file()
@@ -85,8 +109,15 @@ def main() -> int:
     workflow_text = WORKFLOW.read_text(encoding="utf-8")
     for action, sha in action_pins.items():
         assert re.fullmatch(r"[0-9a-f]{40}", sha), (action, sha)
-        assert f"uses: {action}@{sha}" in workflow_text, action
-    assert re.search(r"uses:\s+actions/[^@\s]+@v\d+", workflow_text) is None
+    observed_action_pins = _external_action_pins(workflow_text)
+    assert observed_action_pins == action_pins, (observed_action_pins, action_pins)
+    for hostile_ref in ("owner/tool@main", "owner/tool@v1", "owner/tool@feature/test"):
+        try:
+            _external_action_pins(f"steps:\n  - uses: {hostile_ref}\n")
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError(f"floating external action ref accepted: {hostile_ref}")
 
     unknown_time = _chronology_decorated_record({"correction_id": "HOSTILE-UNKNOWN"})
     assert unknown_time["recorded_at"] is None
@@ -123,6 +154,19 @@ def main() -> int:
                 fake_path, {"pass_id": "INGEST_PASS_999", "continues": "INGEST_PASS_998"}
             )
             assert status == "PREDECESSOR_MISSING"
+            skipped, _ = catalog_module.receipt_chain_status(
+                fake_path, {"pass_id": "INGEST_PASS_999", "continues": "INGEST_PASS_997"}
+            )
+            assert skipped == "NON_IMMEDIATE_PREDECESSOR"
+            missing_continues, _ = catalog_module.receipt_chain_status(
+                fake_path, {"pass_id": "INGEST_PASS_999"}
+            )
+            assert missing_continues == "NON_IMMEDIATE_PREDECESSOR"
+            wrong_path = Path(tmpdir) / "INGEST_PASS_998.json"
+            path_mismatch, _ = catalog_module.receipt_chain_status(
+                wrong_path, {"pass_id": "INGEST_PASS_999", "continues": "INGEST_PASS_998"}
+            )
+            assert path_mismatch == "RECEIPT_PATH_ID_MISMATCH"
     finally:
         catalog_module.UPDATES = original_updates
 
