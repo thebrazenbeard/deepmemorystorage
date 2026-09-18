@@ -10,6 +10,7 @@ explicit repository-audit mode.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import json
 import sys
 from typing import Any
@@ -23,6 +24,29 @@ from deep_memory_catalog import (
 
 RESULT_SCHEMA = "VERA_DEEP_MEMORY_EVIDENCE_RESULT_V1"
 RESULT_SEMANTICS = "HISTORICAL_EVIDENCE_ONLY_NOT_CURRENT_MEMORY_OR_AUTHORITY"
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _time_value_with_status(row: dict[str, Any], field: str) -> tuple[Any, str]:
+    value = row.get(field)
+    if isinstance(value, str) and value.strip():
+        return value, "SOURCE_RECORDED"
+    return None, "UNKNOWN_NOT_RECORDED_IN_SOURCE_ROW"
+
+
+def _chronology_decorated_record(row: dict[str, Any]) -> dict[str, Any]:
+    item = normalized_record(row)
+    recorded_at, recorded_at_status = _time_value_with_status(row, "recorded_at")
+    effective_from, effective_from_status = _time_value_with_status(row, "effective_from")
+    item["recorded_at"] = recorded_at
+    item["recorded_at_status"] = recorded_at_status
+    item["effective_from"] = effective_from
+    item["effective_from_status"] = effective_from_status
+    item["chronology_semantics"] = "EVENT_TIME_RECORD_TIME_EFFECTIVE_TIME_RETRIEVAL_TIME_SEPARATE"
+    return item
 
 
 def _text(value: Any) -> str:
@@ -108,7 +132,7 @@ def _visible_overlay_rows(
         if not audit_all_privacy:
             if effective_scope is None or effective_scope not in authorized_privacy:
                 continue
-        item = normalized_record(row)
+        item = _chronology_decorated_record(row)
         item["effective_privacy_scope"] = effective_scope
         visible.append(item)
     return visible
@@ -231,6 +255,7 @@ def main() -> int:
         }))
 
     hits.sort(key=lambda item: (-item[0], _text(item[2].get("event_time")), item[1]))
+    retrieved_at = _utc_now()
     results: list[dict[str, Any]] = []
     for score, memory_id, row, effective_canonicity, overlay_sets in hits[: max(0, args.limit)]:
         visible_overlay_rows = (
@@ -238,6 +263,7 @@ def main() -> int:
             + overlay_sets["amendments"]
             + overlay_sets["corrections"]
         )
+        recorded_at, recorded_at_status = _time_value_with_status(row, "recorded_at")
         results.append({
             "score": score,
             "memory_id": memory_id,
@@ -245,6 +271,9 @@ def main() -> int:
             "stored_historical_canonicity": row.get("historical_canonicity"),
             "historical_canonicity": effective_canonicity,
             "event_time": row.get("event_time"),
+            "recorded_at": recorded_at,
+            "recorded_at_status": recorded_at_status,
+            "chronology_semantics": "EVENT_TIME_RECORD_TIME_EFFECTIVE_TIME_RETRIEVAL_TIME_SEPARATE",
             "observed_event": row.get("observed_event"),
             "participant_interpretation_at_time": row.get("participant_interpretation_at_time"),
             "later_reevaluation": row.get("later_reevaluation"),
@@ -267,6 +296,7 @@ def main() -> int:
         "schema": RESULT_SCHEMA,
         "query": args.query,
         "privacy_mode": privacy_mode,
+        "retrieved_at": retrieved_at,
         "authorized_privacy_scopes": sorted(authorized_privacy),
         "count": len(results),
         "results": results,

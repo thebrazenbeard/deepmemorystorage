@@ -104,6 +104,78 @@ def sha256_rows(rows: Iterable[dict[str, Any]]) -> str:
     return digest.hexdigest()
 
 
+def union_subject_digest_sha256(*, memories: list[dict[str, Any]], sources: list[dict[str, Any]], amendments: list[dict[str, Any]], corrections: list[dict[str, Any]], historical_canon_overlays: list[dict[str, Any]]) -> str:
+    subjects: list[dict[str, Any]] = []
+    for record_type, rows in (
+        ("memory", memories),
+        ("source", sources),
+        ("provenance_amendment", amendments),
+        ("classification_correction", corrections),
+        ("historical_canon_overlay", historical_canon_overlays),
+    ):
+        for row in rows:
+            subjects.append({
+                "record_type": record_type,
+                "ledger_path": row.get("__ledger_path"),
+                "ledger_line": row.get("__ledger_line"),
+                "record": normalized_record(row),
+            })
+    subjects.sort(key=lambda item: (
+        str(item["record_type"]),
+        str(item.get("ledger_path") or ""),
+        int(item.get("ledger_line") or 0),
+        json.dumps(item["record"], sort_keys=True, separators=(",", ":"), ensure_ascii=False),
+    ))
+    payload = json.dumps(subjects, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def receipt_chain_status(receipt_path: Path | None, receipt: dict[str, Any] | None) -> tuple[str, list[str]]:
+    if receipt_path is None or receipt is None:
+        return "NO_RECEIPT", []
+    visited: set[str] = set()
+    chain: list[str] = []
+    current_path = receipt_path
+    current = receipt
+    while True:
+        pass_id = current.get("pass_id")
+        if not isinstance(pass_id, str) or not re.fullmatch(r"INGEST_PASS_\d+", pass_id):
+            return "INVALID_PASS_ID", chain
+        if pass_id in visited:
+            return "CYCLE_DETECTED", chain + [pass_id]
+        visited.add(pass_id)
+        chain.append(pass_id)
+        continues = current.get("continues")
+        if continues is None:
+            return "CHAIN_RESOLVES", chain
+        if not isinstance(continues, str) or not re.fullmatch(r"INGEST_PASS_\d+", continues):
+            return "INVALID_CONTINUES", chain
+        predecessor_path = UPDATES / f"{continues}.json"
+        if not predecessor_path.is_file():
+            return "PREDECESSOR_MISSING", chain
+        predecessor = json.loads(predecessor_path.read_text(encoding="utf-8"))
+        if not isinstance(predecessor, dict) or predecessor.get("pass_id") != continues:
+            return "PREDECESSOR_ID_MISMATCH", chain
+        current_path = predecessor_path
+        current = predecessor
+
+
+def receipt_union_match_status(receipt: dict[str, Any] | None, *, row_count: int, union_digest: str) -> str:
+    if receipt is None:
+        return "NO_RECEIPT"
+    expected_count = receipt.get("aggregate_archival_rows_after_pass")
+    if not isinstance(expected_count, int) or expected_count != row_count:
+        return "ROW_COUNT_MISMATCH"
+    expected_digest = receipt.get("aggregate_union_subject_digest_sha256")
+    if expected_digest is None:
+        return "ROW_COUNT_MATCH"
+    if not isinstance(expected_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_digest):
+        return "INVALID_CORPUS_SUBJECT_DIGEST"
+    if expected_digest != union_digest:
+        return "CORPUS_SUBJECT_MISMATCH"
+    return "CORPUS_SUBJECT_MATCH"
+
+
 def exact_historical_canonicity(value: Any) -> str | None:
     if isinstance(value, str) and value in VALID_HISTORICAL_CANONICITY:
         return value
@@ -320,6 +392,8 @@ def load_union() -> dict[str, Any]:
             "historical_canon_boundaries": overlay_boundaries,
             "event_time": row.get("event_time"),
             "time_status": row.get("time_status"),
+            "recorded_at": row.get("recorded_at") if isinstance(row.get("recorded_at"), str) and row.get("recorded_at") else None,
+            "recorded_at_status": "SOURCE_RECORDED" if isinstance(row.get("recorded_at"), str) and row.get("recorded_at") else "UNKNOWN_NOT_RECORDED_IN_SOURCE_ROW",
             "privacy_scope": row.get("privacy_scope"),
             "stored_source_ids": stored_source_ids,
             "source_ids": effective_source_ids,
@@ -343,6 +417,21 @@ def load_union() -> dict[str, Any]:
     receipt_path, receipt = latest_receipt()
     expected_count = None
     latest_pass_id = None
+    union_subject_digest = union_subject_digest_sha256(
+        memories=memories,
+        sources=sources,
+        amendments=amendments,
+        corrections=corrections,
+        historical_canon_overlays=historical_canon_overlays,
+    )
+    chain_status, receipt_chain = receipt_chain_status(receipt_path, receipt)
+    if chain_status not in {"CHAIN_RESOLVES", "NO_RECEIPT"}:
+        errors.append(f"latest receipt chain does not resolve: {chain_status}")
+    receipt_match_status = receipt_union_match_status(
+        receipt,
+        row_count=len(memory_by_id),
+        union_digest=union_subject_digest,
+    )
     if receipt:
         expected_count = receipt.get("aggregate_archival_rows_after_pass")
         latest_pass_id = receipt.get("pass_id")
@@ -351,6 +440,8 @@ def load_union() -> dict[str, Any]:
                 f"latest receipt {receipt_path.relative_to(ROOT)} declares {expected_count} archival rows; "
                 f"ledger union contains {len(memory_by_id)} unique memory_ids"
             )
+        if receipt_match_status in {"INVALID_CORPUS_SUBJECT_DIGEST", "CORPUS_SUBJECT_MISMATCH"}:
+            errors.append(f"latest receipt corpus subject validation failed: {receipt_match_status}")
 
     return {
         "memories": memories,
@@ -381,6 +472,10 @@ def load_union() -> dict[str, Any]:
         "historical_canon_overlay_file_count": len(historical_canon_overlays),
         "historical_canon_overlay_assignment_count": historical_canon_overlay_assignment_count,
         "catalog_digest_sha256": sha256_rows(catalog),
+        "union_subject_digest_sha256": union_subject_digest,
+        "receipt_chain_status": chain_status,
+        "receipt_chain": receipt_chain,
+        "receipt_union_match_status": receipt_match_status,
         "memory_paths": [str(path.relative_to(ROOT)) for path in memory_paths],
         "source_paths": [str(path.relative_to(ROOT)) for path in source_paths],
         "historical_canon_paths": [str(path.relative_to(ROOT)) for path in historical_canon_paths],
@@ -404,6 +499,10 @@ def build_manifest(union: dict[str, Any]) -> dict[str, Any]:
         "historical_canon_overlay_files": union["historical_canon_overlay_file_count"],
         "historical_canon_overlay_assignments": union["historical_canon_overlay_assignment_count"],
         "catalog_digest_sha256": union["catalog_digest_sha256"],
+        "union_subject_digest_sha256": union["union_subject_digest_sha256"],
+        "latest_receipt_chain_status": union["receipt_chain_status"],
+        "latest_receipt_chain": union["receipt_chain"],
+        "latest_receipt_union_match_status": union["receipt_union_match_status"],
         "memory_tranches": union["memory_paths"],
         "source_tranches": union["source_paths"],
         "historical_canon_overlays": union["historical_canon_paths"],
@@ -411,7 +510,9 @@ def build_manifest(union: dict[str, Any]) -> dict[str, Any]:
             "errors": union["errors"],
             "warnings": union["warnings"],
             "latest_receipt_expected_rows": union["latest_receipt_expected_rows"],
-            "latest_receipt_matches_union": not any("latest receipt" in error for error in union["errors"]),
+            "latest_receipt_matches_union": union["receipt_union_match_status"] == "CORPUS_SUBJECT_MATCH",
+            "latest_receipt_row_count_matches_union": union["receipt_union_match_status"] in {"ROW_COUNT_MATCH", "CORPUS_SUBJECT_MATCH"},
+            "lineage_claim_ceiling": "EXACT_CORPUS_SUBJECT" if union["receipt_union_match_status"] == "CORPUS_SUBJECT_MATCH" else "ROW_COUNT_ONLY_OR_WEAKER",
         },
         "nonpromotion": {
             "current_authority": False,
@@ -459,6 +560,9 @@ def main() -> int:
         "historical_canon_overlay_file_count": union["historical_canon_overlay_file_count"],
         "historical_canon_overlay_assignment_count": union["historical_canon_overlay_assignment_count"],
         "catalog_digest_sha256": union["catalog_digest_sha256"],
+        "union_subject_digest_sha256": union["union_subject_digest_sha256"],
+        "receipt_chain_status": union["receipt_chain_status"],
+        "receipt_union_match_status": union["receipt_union_match_status"],
         "errors": union["errors"],
         "warnings": union["warnings"],
     }

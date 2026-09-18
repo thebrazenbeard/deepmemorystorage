@@ -28,6 +28,9 @@
       "memory_class",
       "historical_canonicity",
       "event_time",
+      "recorded_at",
+      "recorded_at_status",
+      "chronology_semantics",
       "source_ids",
       "privacy_scope",
       "provenance_ceiling",
@@ -85,6 +88,15 @@
     "missing_referenced_source_ids":"REPORT",
     "stale_legacy_root_indexes":"WARN_NOT_CANONICAL",
     "privacy_without_authorized_scope":"FAIL_CLOSED",
-    "overlay_privacy":"INHERIT_TARGET_UNLESS_EXPLICIT_SCOPE_REQUIRES_SEPARATE_AUTHORIZATION"
+    "overlay_privacy":"INHERIT_TARGET_UNLESS_EXPLICIT_SCOPE_REQUIRES_SEPARATE_AUTHORIZATION",
+    "latest_receipt_exact_lineage_requires_corpus_subject_digest":true,
+    "latest_receipt_row_count_match_is_not_exact_lineage":true,
+    "receipt_predecessor_chain":"FAIL_CLOSED_IF_UNRESOLVED",
+    "workflow_external_actions":"IMMUTABLE_COMMIT_SHA_ONLY",
+    "external_action_pins":{
+      "actions/checkout":"11d5960a326750d5838078e36cf38b85af677262",
+      "actions/setup-python":"a26af69be951a213d495a4c3e4e4022e16d87065",
+      "actions/upload-artifact":"ea165f8d65b6e75b540449e92b4886f43607fa02"
+    }
   }
 }

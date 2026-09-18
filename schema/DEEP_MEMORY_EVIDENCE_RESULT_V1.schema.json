@@ -3,11 +3,12 @@
   "$id": "VERA_DEEP_MEMORY_EVIDENCE_RESULT_V1",
   "title": "Vera Deep Memory historical evidence search result",
   "type": "object",
-  "required": ["schema", "query", "privacy_mode", "authorized_privacy_scopes", "count", "results"],
+  "required": ["schema", "query", "privacy_mode", "retrieved_at", "authorized_privacy_scopes", "count", "results"],
   "properties": {
     "schema": {"const": "VERA_DEEP_MEMORY_EVIDENCE_RESULT_V1"},
     "query": {"type": "string"},
     "privacy_mode": {"enum": ["AUTHORIZED_SCOPE_FILTER", "EXPLICIT_ARCHIVE_AUDIT_ALL"]},
+    "retrieved_at": {"type": "string", "minLength": 1},
     "authorized_privacy_scopes": {
       "type": "array",
       "items": {"type": "string", "minLength": 1},
@@ -24,6 +25,9 @@
           "stored_historical_canonicity",
           "historical_canonicity",
           "event_time",
+          "recorded_at",
+          "recorded_at_status",
+          "chronology_semantics",
           "provenance_ceiling",
           "privacy_scope",
           "currentness_rule",
@@ -49,6 +53,9 @@
             ]
           },
           "event_time": {},
+          "recorded_at": {"type": ["string", "null"]},
+          "recorded_at_status": {"enum": ["SOURCE_RECORDED", "UNKNOWN_NOT_RECORDED_IN_SOURCE_ROW"]},
+          "chronology_semantics": {"const": "EVENT_TIME_RECORD_TIME_EFFECTIVE_TIME_RETRIEVAL_TIME_SEPARATE"},
           "observed_event": {},
           "participant_interpretation_at_time": {},
           "later_reevaluation": {},
@@ -66,15 +73,48 @@
           "ledger_line": {"type": "integer", "minimum": 1},
           "historical_canon_overlays": {
             "type": "array",
-            "items": {"type": "object"}
+            "items": {
+              "type": "object",
+              "required": ["recorded_at", "recorded_at_status", "effective_from", "effective_from_status", "chronology_semantics"],
+              "properties": {
+                "recorded_at": {"type": ["string", "null"]},
+                "recorded_at_status": {"enum": ["SOURCE_RECORDED", "UNKNOWN_NOT_RECORDED_IN_SOURCE_ROW"]},
+                "effective_from": {"type": ["string", "null"]},
+                "effective_from_status": {"enum": ["SOURCE_RECORDED", "UNKNOWN_NOT_RECORDED_IN_SOURCE_ROW"]},
+                "chronology_semantics": {"const": "EVENT_TIME_RECORD_TIME_EFFECTIVE_TIME_RETRIEVAL_TIME_SEPARATE"}
+              },
+              "additionalProperties": true
+            }
           },
           "amendments": {
             "type": "array",
-            "items": {"type": "object"}
+            "items": {
+              "type": "object",
+              "required": ["recorded_at", "recorded_at_status", "effective_from", "effective_from_status", "chronology_semantics"],
+              "properties": {
+                "recorded_at": {"type": ["string", "null"]},
+                "recorded_at_status": {"enum": ["SOURCE_RECORDED", "UNKNOWN_NOT_RECORDED_IN_SOURCE_ROW"]},
+                "effective_from": {"type": ["string", "null"]},
+                "effective_from_status": {"enum": ["SOURCE_RECORDED", "UNKNOWN_NOT_RECORDED_IN_SOURCE_ROW"]},
+                "chronology_semantics": {"const": "EVENT_TIME_RECORD_TIME_EFFECTIVE_TIME_RETRIEVAL_TIME_SEPARATE"}
+              },
+              "additionalProperties": true
+            }
           },
           "classification_corrections": {
             "type": "array",
-            "items": {"type": "object"}
+            "items": {
+              "type": "object",
+              "required": ["recorded_at", "recorded_at_status", "effective_from", "effective_from_status", "chronology_semantics"],
+              "properties": {
+                "recorded_at": {"type": ["string", "null"]},
+                "recorded_at_status": {"enum": ["SOURCE_RECORDED", "UNKNOWN_NOT_RECORDED_IN_SOURCE_ROW"]},
+                "effective_from": {"type": ["string", "null"]},
+                "effective_from_status": {"enum": ["SOURCE_RECORDED", "UNKNOWN_NOT_RECORDED_IN_SOURCE_ROW"]},
+                "chronology_semantics": {"const": "EVENT_TIME_RECORD_TIME_EFFECTIVE_TIME_RETRIEVAL_TIME_SEPARATE"}
+              },
+              "additionalProperties": true
+            }
           },
           "overlay_privacy_semantics": {
             "const": "OVERLAY_INHERITS_TARGET_PRIVACY_UNLESS_EXPLICIT_SCOPE_REQUIRES_SEPARATE_AUTHORIZATION"

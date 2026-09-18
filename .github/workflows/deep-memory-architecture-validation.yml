@@ -26,8 +26,8 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Compile tools
@@ -47,7 +47,7 @@ jobs:
           exit "$code"
       - name: Preserve validation diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: deep-memory-validation-diagnostics
           path: |
@@ -61,6 +61,16 @@ jobs:
           python tools/deep_memory_catalog.py --write-output /tmp/deep-memory-catalog --json
           test -s /tmp/deep-memory-catalog/retrieval_catalog.jsonl
           test -s /tmp/deep-memory-catalog/corpus_manifest.json
+          python - <<'PY'
+          import json
+          manifest = json.load(open('/tmp/deep-memory-catalog/corpus_manifest.json', encoding='utf-8'))
+          assert len(manifest['union_subject_digest_sha256']) == 64
+          assert manifest['latest_receipt_chain_status'] == 'CHAIN_RESOLVES'
+          assert manifest['latest_receipt_union_match_status'] == 'ROW_COUNT_MATCH'
+          assert manifest['validation']['latest_receipt_matches_union'] is False
+          assert manifest['validation']['latest_receipt_row_count_matches_union'] is True
+          assert manifest['validation']['lineage_claim_ceiling'] == 'ROW_COUNT_ONLY_OR_WEAKER'
+          PY
       - name: Prove catalog carries effective overlay provenance
         run: |
           python - <<'PY'
@@ -141,11 +151,13 @@ jobs:
           data = json.load(open('/tmp/deep-memory-query.json', encoding='utf-8'))
           assert data.get('schema') == 'VERA_DEEP_MEMORY_EVIDENCE_RESULT_V1'
           assert data.get('privacy_mode') == 'EXPLICIT_ARCHIVE_AUDIT_ALL'
+          assert data.get('retrieved_at')
           assert isinstance(data.get('results'), list)
           assert data['results'], 'expected at least one bounded historical result'
           required = {
               'memory_id', 'memory_class', 'stored_historical_canonicity', 'historical_canonicity',
-              'event_time', 'provenance_ceiling', 'privacy_scope', 'currentness_rule',
+              'event_time', 'recorded_at', 'recorded_at_status', 'chronology_semantics',
+              'provenance_ceiling', 'privacy_scope', 'currentness_rule',
               'governed_memory_admission', 'source_ids', 'ledger_path',
               'overlay_privacy_semantics', 'result_semantics',
           }
