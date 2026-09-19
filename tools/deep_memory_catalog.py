@@ -176,7 +176,9 @@ def receipt_union_match_status(receipt: dict[str, Any] | None, *, row_count: int
     if receipt is None:
         return "NO_RECEIPT"
     expected_count = receipt.get("aggregate_archival_rows_after_pass")
-    if not isinstance(expected_count, int) or expected_count != row_count:
+    if isinstance(expected_count, bool) or not isinstance(expected_count, int) or expected_count < 0:
+        return "ROW_COUNT_MISMATCH"
+    if expected_count != row_count:
         return "ROW_COUNT_MISMATCH"
     expected_digest = receipt.get("aggregate_union_subject_digest_sha256")
     if expected_digest is None:
@@ -447,7 +449,12 @@ def load_union() -> dict[str, Any]:
     if receipt:
         expected_count = receipt.get("aggregate_archival_rows_after_pass")
         latest_pass_id = receipt.get("pass_id")
-        if isinstance(expected_count, int) and expected_count != len(memory_by_id):
+        if isinstance(expected_count, bool) or not isinstance(expected_count, int) or expected_count < 0:
+            errors.append(
+                f"latest receipt {receipt_path.relative_to(ROOT)} has invalid aggregate_archival_rows_after_pass; "
+                "expected a non-negative integer"
+            )
+        elif expected_count != len(memory_by_id):
             errors.append(
                 f"latest receipt {receipt_path.relative_to(ROOT)} declares {expected_count} archival rows; "
                 f"ledger union contains {len(memory_by_id)} unique memory_ids"

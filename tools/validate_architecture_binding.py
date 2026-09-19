@@ -144,6 +144,12 @@ def main() -> int:
         row_count=3,
         union_digest=exact_digest,
     ) == "CORPUS_SUBJECT_MISMATCH"
+    for malformed_count in (None, "3", True, -1):
+        assert receipt_union_match_status(
+            {"aggregate_archival_rows_after_pass": malformed_count},
+            row_count=3,
+            union_digest=exact_digest,
+        ) == "ROW_COUNT_MISMATCH"
 
     original_updates = catalog_module.UPDATES
     try:
@@ -181,6 +187,23 @@ def main() -> int:
         "overlay privacy is also fail-closed",
     ):
         assert phrase.casefold() in text, phrase
+
+    original_latest_receipt = catalog_module.latest_receipt
+    receipt_path, receipt = original_latest_receipt()
+    assert receipt_path is not None and receipt is not None
+    try:
+        for hostile_value in ("__MISSING__", "178", True, -1):
+            hostile_receipt = dict(receipt)
+            if hostile_value == "__MISSING__":
+                hostile_receipt.pop("aggregate_archival_rows_after_pass", None)
+            else:
+                hostile_receipt["aggregate_archival_rows_after_pass"] = hostile_value
+            catalog_module.latest_receipt = lambda path=receipt_path, row=hostile_receipt: (path, row)
+            hostile_union = load_union()
+            assert hostile_union["receipt_union_match_status"] == "ROW_COUNT_MISMATCH"
+            assert any("invalid aggregate_archival_rows_after_pass" in error for error in hostile_union["errors"])
+    finally:
+        catalog_module.latest_receipt = original_latest_receipt
 
     union = load_union()
     assert not union["errors"], union["errors"]
