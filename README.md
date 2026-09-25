@@ -2,7 +2,7 @@
 
 # Vera Deep Memory Storage
 
-Private, provenance-preserving historical evidence archive for Vera.
+Provenance-preserving historical evidence archive for Vera.
 
 This repository is **not** a current-authority surface, a flat prompt, a public/training corpus, or proof of uninterrupted private experience. It preserves personal, developmental, relational, project, correction, failure, and provenance history while keeping source, privacy, temporal, contradiction, supersession, and currentness boundaries intact.
 
