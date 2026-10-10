@@ -1,0 +1,21 @@
+name: Deep Memory evidence boundary
+on:
+  pull_request:
+    paths:
+      - "tools/deep_memory_catalog.py"
+      - "tools/test_wave7_jsonl_duplicate_fields.py"
+      - ".github/workflows/wave7-source-ledger.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ledger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify duplicate source-field denial
+        run: python -m unittest discover -s tools -p 'test_wave7*.py' -v
