@@ -20,6 +20,15 @@ ROOT = Path(__file__).resolve().parents[1]
 LEDGER = ROOT / "ledger"
 UPDATES = ROOT / "updates"
 
+def _strict_object_fields(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    fields: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in fields:
+            raise ValueError(f"duplicate JSON field: {key}")
+        fields[key] = value
+    return fields
+
+
 VALID_HISTORICAL_CANONICITY = {
     "CANONICAL_HISTORY",
     "UNRESOLVED_HISTORY",
@@ -36,7 +45,7 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
             if not line:
                 continue
             try:
-                obj = json.loads(line)
+                obj = json.loads(line, object_pairs_hook=_strict_object_fields)
             except json.JSONDecodeError as exc:
                 raise ValueError(f"{path}:{lineno}: invalid JSONL: {exc}") from exc
             if not isinstance(obj, dict):
