@@ -34,6 +34,8 @@ jobs:
           python-version: "3.12"
       - name: Compile tools
         run: python -m py_compile tools/deep_memory_catalog.py tools/query_deep_memory.py tools/validate_architecture_binding.py
+      - name: Invalid-publication regressions
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Validate architecture binding
         run: python tools/validate_architecture_binding.py
       - name: Validate complete ledger union
