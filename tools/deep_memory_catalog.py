@@ -12,6 +12,7 @@ import hashlib
 import json
 import re
 import sys
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable
@@ -542,13 +543,27 @@ def build_manifest(union: dict[str, Any]) -> dict[str, Any]:
 
 
 def write_outputs(union: dict[str, Any], output_dir: Path) -> None:
+    # Integration consumers must never see freshly materialized outputs from a
+    # corpus whose uniqueness, receipt, or digest checks have failed.
+    if union.get("errors"):
+        raise ValueError("refusing to materialize invalid corpus")
     output_dir.mkdir(parents=True, exist_ok=True)
-    with (output_dir / "retrieval_catalog.jsonl").open("w", encoding="utf-8") as fh:
-        for row in union["catalog"]:
-            fh.write(json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n")
-    with (output_dir / "corpus_manifest.json").open("w", encoding="utf-8") as fh:
-        json.dump(build_manifest(union), fh, indent=2, sort_keys=True, ensure_ascii=False)
-        fh.write("\n")
+    # Stage both serializations first: bad data or serialization failures must
+    # not truncate any previously published output. Each replace is atomic per
+    # file; callers must not mistake the two-file output for a transactional
+    # multi-file snapshot across a sudden process/host failure.
+    with tempfile.TemporaryDirectory(prefix=".deep-memory-stage-", dir=output_dir) as staged:
+        stage_dir = Path(staged)
+        staged_catalog = stage_dir / "retrieval_catalog.jsonl"
+        staged_manifest = stage_dir / "corpus_manifest.json"
+        with staged_catalog.open("w", encoding="utf-8") as fh:
+            for row in union["catalog"]:
+                fh.write(json.dumps(row, sort_keys=True, ensure_ascii=False) + "\n")
+        with staged_manifest.open("w", encoding="utf-8") as fh:
+            json.dump(build_manifest(union), fh, indent=2, sort_keys=True, ensure_ascii=False)
+            fh.write("\n")
+        staged_catalog.replace(output_dir / "retrieval_catalog.jsonl")
+        staged_manifest.replace(output_dir / "corpus_manifest.json")
 
 
 def main() -> int:
@@ -564,7 +579,7 @@ def main() -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
-    if args.write_output:
+    if args.write_output and not union["errors"]:
         write_outputs(union, args.write_output)
 
     summary = {

@@ -55,3 +55,13 @@ Repository CI validates the complete union rather than a hand-maintained subset.
 - query results carry explicit historical-evidence/nonpromotion semantics.
 
 A validation pass proves repository consistency only. It does not prove runtime installation, provider activation, current-memory admission, behavioral qualification, or present subjective state.
+
+When `deep_memory_catalog.py --write-output DIRECTORY` is used, archive
+validation errors now block catalog/manifest publication, including attempts
+to overwrite an existing output. Both outputs are serialized in a temporary
+staging directory before replacement, so serialization failure preserves the
+previous files. Replacement is atomic **per file**, not a single crash-atomic
+transaction across the catalog/manifest pair. A consumer that requires a
+consistent pair must additionally check the manifest's catalog digest and
+archive validation status before using it. Catalog files remain historical
+evidence, never governed current-memory or consent authorization.
