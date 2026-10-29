@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from private_stm_policy_host import HostPolicyBoundary
-from test_private_stm_receiver import exact, NOW, SCOPE, OTHER
+from test_private_stm_receiver import exact, NOW, SCOPE, OTHER, synthetic_windows_acl
 
 
 class AtomicHostPolicyTests(unittest.TestCase):
@@ -43,6 +43,7 @@ class AtomicHostPolicyTests(unittest.TestCase):
             authenticate=lambda p, s: self.allowed and p is self.principal and s == SCOPE,
             verify_consent_grant=lambda p, s: self.grant_evidence and p is self.principal and s == SCOPE,
             scope_key=lambda: self.scope_key,
+            verify_windows_acl=synthetic_windows_acl,
         )
         self.receiver = self.boundary.bind_receiver(
             destination_id="synthetic-private-receiver",
@@ -83,11 +84,13 @@ class AtomicHostPolicyTests(unittest.TestCase):
             HostPolicyBoundary(directory=self.path, principal=self.principal,
                 scope=SCOPE, authenticate=lambda p, s: True,
                 verify_consent_grant=lambda p, s: True,
-                scope_key=lambda: secrets.token_bytes(32))
+                scope_key=lambda: secrets.token_bytes(32),
+                verify_windows_acl=synthetic_windows_acl)
         reopened = HostPolicyBoundary(directory=self.path, principal=self.principal,
             scope=SCOPE, authenticate=lambda p, s: p is self.principal,
             verify_consent_grant=lambda p, s: True,
-            scope_key=lambda: self.scope_key)
+            scope_key=lambda: self.scope_key,
+            verify_windows_acl=synthetic_windows_acl)
         with self.assertRaises(PermissionError):
             reopened.grant_once()
 
@@ -132,7 +135,8 @@ class AtomicHostPolicyTests(unittest.TestCase):
         recovered = HostPolicyBoundary(directory=self.path, principal=self.principal,
             scope=SCOPE, authenticate=lambda p, s: p is self.principal,
             verify_consent_grant=lambda p, s: False,
-            scope_key=lambda: self.scope_key)
+            scope_key=lambda: self.scope_key,
+            verify_windows_acl=synthetic_windows_acl)
         recovered_receiver = recovered.bind_receiver(destination_id="synthetic-private-receiver",
             encryption_key=lambda: self.key, receipt_key=lambda: self.receipt_key,
             clock=lambda: NOW)
@@ -234,7 +238,8 @@ class AtomicHostPolicyTests(unittest.TestCase):
             "p='trusted';b=HostPolicyBoundary(directory=sys.argv[1],scope=('tenant-a','owner-a','agent-a'),"
             "principal=p,authenticate=lambda principal,scope:principal==p,"
             "verify_consent_grant=lambda principal,scope:False,"
-            "scope_key=lambda:bytes.fromhex(sys.argv[3]));"
+            "scope_key=lambda:bytes.fromhex(sys.argv[3]),"
+            "verify_windows_acl=lambda path:True);"
             "print('ready',flush=True);"
             "cm=b.lease(p,'long_term_revoke',b.scope,None,None,None);"
             "print('attempting',flush=True);"

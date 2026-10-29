@@ -22,6 +22,11 @@ SCOPE = ("tenant-a", "owner-a", "agent-a")
 OTHER = ("tenant-a", "owner-b", "agent-a")
 
 
+def synthetic_windows_acl(_path):
+    """Unit-test stub only; never evidence of a real Windows service ACL."""
+    return True
+
+
 @dataclass(frozen=True)
 class SyntheticSTMRecord:
     schema: str = "STM_HISTORICAL_HANDOFF_CANDIDATE_V1"
@@ -93,6 +98,7 @@ class PrivateReceiverTests(unittest.TestCase):
             receipt_key=lambda: self.mac, authorize=self.authorize,
             consent=self.consent_check, clock=lambda: self.now,
             policy_lease=lambda *_: self.policy_lock,
+            verify_windows_acl=synthetic_windows_acl,
         )
 
     def test_unprotected_policy_lease_fails_before_write(self):
@@ -102,6 +108,7 @@ class PrivateReceiverTests(unittest.TestCase):
             receipt_key=lambda: self.mac, authorize=self.authorize,
             consent=self.consent_check, clock=lambda: self.now,
             policy_lease=lambda *_: None,
+            verify_windows_acl=synthetic_windows_acl,
         )
         with self.assertRaises(PermissionError):
             receiver.submit(exact(), target=self.target, idempotency_key="e" * 64)
