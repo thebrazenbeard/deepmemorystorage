@@ -336,6 +336,11 @@ def load_union() -> dict[str, Any]:
                 "special_boundary": special_boundaries.get(memory_id),
                 "__ledger_path": path,
             }
+            # Preserve presence, not merely value: explicit malformed scopes
+            # must fail closed in query_deep_memory instead of inheriting the
+            # target's privacy authorization.
+            if "privacy_scope" in overlay:
+                overlay_row["privacy_scope"] = overlay["privacy_scope"]
             canon_overlays_by_target[memory_id].append(overlay_row)
             historical_canon_overlay_assignment_count += 1
             if memory_id not in memory_by_id:

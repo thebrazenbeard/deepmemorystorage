@@ -111,9 +111,12 @@ def _score(row: dict[str, Any], query: str, overlay_rows: list[dict[str, Any]] |
 
 
 def _overlay_privacy_scope(row: dict[str, Any], target_privacy_scope: Any) -> str | None:
-    explicit = row.get("privacy_scope")
-    if isinstance(explicit, str) and explicit:
-        return explicit
+    # An absent override inherits the target's scope. A *present but malformed*
+    # override is not absence: inheriting it would disclose a restricted overlay
+    # to a caller authorized only for the base memory.
+    if "privacy_scope" in row:
+        explicit = row["privacy_scope"]
+        return explicit if isinstance(explicit, str) and explicit.strip() else None
     if isinstance(target_privacy_scope, str) and target_privacy_scope:
         return target_privacy_scope
     return None
