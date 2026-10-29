@@ -8,12 +8,13 @@ import secrets
 import sqlite3
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from private_stm_receiver import PrivateSTMReceiver, HISTORICAL_ONLY
+from private_stm_receiver import PrivateSTMReceiver, RetentionIncomplete, HISTORICAL_ONLY
 
 
 NOW = datetime(2026, 10, 29, 12, 0, tzinfo=timezone.utc)
@@ -69,6 +70,7 @@ class PrivateReceiverTests(unittest.TestCase):
         self.authorized = True
         self.now = NOW
         self.principal = object()
+        self.policy_lock = threading.RLock()
         self.target = SimpleNamespace(
             destination_id="host-owned-private-dms",
             retention_until=NOW + timedelta(days=400),
@@ -90,7 +92,89 @@ class PrivateReceiverTests(unittest.TestCase):
             principal=self.principal, encryption_key=lambda: self.key,
             receipt_key=lambda: self.mac, authorize=self.authorize,
             consent=self.consent_check, clock=lambda: self.now,
+            policy_lease=lambda *_: self.policy_lock,
         )
+
+    def test_unprotected_policy_lease_fails_before_write(self):
+        receiver = PrivateSTMReceiver(
+            directory=self.path, destination_id="host-owned-private-dms",
+            principal=self.principal, encryption_key=lambda: self.key,
+            receipt_key=lambda: self.mac, authorize=self.authorize,
+            consent=self.consent_check, clock=lambda: self.now,
+            policy_lease=lambda *_: None,
+        )
+        with self.assertRaises(PermissionError):
+            receiver.submit(exact(), target=self.target, idempotency_key="e" * 64)
+        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM records").fetchone()[0], 0)
+
+    def test_withdrawal_during_initial_consent_callback_rolls_back_write(self):
+        # Defense in depth if a host callback invalidates its own initial
+        # positive consent result before the transaction is committed.
+        def withdrawing_consent(principal, action, scope, privacy, source_id, target):
+            if action == "long_term_export" and self.consent:
+                self.consent = False
+                return True
+            return self.consent
+
+        self.consent_check = withdrawing_consent
+        receiver = self.receiver()
+        with self.assertRaises(PermissionError):
+            receiver.submit(exact(), target=self.target, idempotency_key="d" * 64)
+        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM records").fetchone()[0], 0)
+
+    def test_host_lease_serializes_withdrawal_then_tombstones_inflight_write(self):
+        # A qualified host MUST take this same policy lock when withdrawing
+        # consent. The module's lease covers authorization through commit.
+        in_consent = threading.Event()
+        allow_consent_to_return = threading.Event()
+        revoker_started = threading.Event()
+        revoker_acquired = threading.Event()
+        original = self.consent_check
+
+        def paused_consent(*args):
+            value = original(*args)
+            if args[1] == "long_term_export":
+                in_consent.set()
+                self.assertTrue(allow_consent_to_return.wait(5))
+            return value
+
+        self.consent_check = paused_consent
+        receiver = self.receiver()
+        outcomes = {}
+
+        def write():
+            try:
+                outcomes["receipt"] = receiver.submit(
+                    exact(), target=self.target, idempotency_key="c" * 64)
+            except Exception as exc:
+                outcomes["error"] = exc
+
+        def withdraw():
+            revoker_started.set()
+            with self.policy_lock:
+                revoker_acquired.set()
+                self.consent = False
+                receiver.revoke_scope(scope=SCOPE)
+
+        writer = threading.Thread(target=write)
+        writer.start()
+        self.assertTrue(in_consent.wait(5))
+        revoker = threading.Thread(target=withdraw)
+        revoker.start()
+        self.assertTrue(revoker_started.wait(5))
+        self.assertFalse(revoker_acquired.wait(0.1))
+        allow_consent_to_return.set()
+        writer.join(5)
+        revoker.join(5)
+        self.assertFalse(writer.is_alive())
+        self.assertFalse(revoker.is_alive())
+        self.assertNotIn("error", outcomes)
+        self.assertIn("receipt", outcomes)
+        self.assertTrue(revoker_acquired.is_set())
+        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+            self.assertIsNone(db.execute("SELECT ciphertext FROM records").fetchone()[0])
 
     def test_synthetic_durable_handoff_and_independent_reopen_readback(self):
         record = exact()
@@ -232,6 +316,36 @@ class PrivateReceiverTests(unittest.TestCase):
         with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
             self.assertIsNone(db.execute("SELECT ciphertext FROM records").fetchone()[0])
 
+    def test_expiration_is_bounded_restartable_and_alerts_on_backlog(self):
+        receiver = self.receiver()
+        for i in range(3):
+            receiver.submit(exact(turn_id=f"turn-{i}",
+                                  source_id=f"host:synthetic:turn-{i}"),
+                            target=self.target, idempotency_key=str(i + 1) * 64)
+        self.now = self.target.retention_until
+        with self.assertRaises(RetentionIncomplete) as raised:
+            receiver.expire_due(batch_size=2)
+        self.assertEqual(raised.exception.processed, 2)
+        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM records WHERE erased_at IS NULL").fetchone()[0], 1)
+        self.assertEqual(receiver.expire_due(batch_size=2), 1)
+        self.assertEqual(receiver.expire_due(batch_size=2), 0)
+        with self.assertRaises(ValueError):
+            receiver.expire_due(batch_size=0)
+
+    def test_expiration_same_source_versions_do_not_raise_false_backlog(self):
+        receiver = self.receiver()
+        for i in range(2):
+            receiver.submit(exact(turn_id=f"corrected-turn-{i}",
+                                  source_id="host:synthetic:shared-source"),
+                            target=self.target, idempotency_key=str(i + 7) * 64)
+        self.now = self.target.retention_until
+        # One source tombstone erases both versions, even though the candidate
+        # query is bounded to one row. No due ciphertext remains to alert on.
+        self.assertEqual(receiver.expire_due(batch_size=1), 2)
+        self.assertEqual(receiver.expire_due(batch_size=1), 0)
+
     def test_public_git_root_is_not_a_private_vault(self):
         checkout = Path(__file__).resolve().parents[1]
         with self.assertRaises(PermissionError):
@@ -240,6 +354,7 @@ class PrivateReceiverTests(unittest.TestCase):
                 principal=self.principal, encryption_key=lambda: self.key,
                 receipt_key=lambda: self.mac, authorize=self.authorize,
                 consent=self.consent_check,
+                policy_lease=lambda *_: self.policy_lock,
             )
 
     def test_key_rotation_without_migration_fails_closed(self):

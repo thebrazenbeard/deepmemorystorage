@@ -29,6 +29,17 @@ HISTORICAL_ONLY = "HISTORICAL_EVIDENCE_ONLY_NOT_CURRENT_MEMORY_OR_AUTHORITY"
 SCHEMA = "STM_HISTORICAL_HANDOFF_CANDIDATE_V1"
 HEX_64 = re.compile(r"[a-f0-9]{64}\Z")
 MAX_CONTENT_BYTES = 262_144  # Match STM's archive content bound.
+MAX_EXPIRE_BATCH = 1000
+
+
+class RetentionIncomplete(RuntimeError):
+    """The bounded sweep committed progress but at least one due row remains."""
+
+    def __init__(self, processed: int) -> None:
+        self.processed = processed
+        super().__init__("private retention backlog remains after bounded sweep")
+
+
 REQUIRED = frozenset({
     "schema", "tenant_id", "owner_id", "agent_id", "turn_id",
     "conversation_id", "role", "content", "source_id", "privacy_scope",
@@ -124,21 +135,24 @@ class PrivateSTMReceiver:
     """An authenticated-host-injected STM HistoricalSink, not an HTTP server.
 
     ``authorize`` and ``consent`` must read live, authoritative state and return
-    literal True. The host must serialize consent withdrawal against writes;
-    this module cannot turn user-provided callback claims into verified identity.
+    literal True. ``policy_lease`` MUST hold a host-owned serialization lease
+    shared with the host's consent-withdrawal path until the database operation
+    commits. A context manager alone is not proof that its host lock is sound;
+    this module cannot turn callback claims into verified identity.
     Both keys are host-owned 32-byte secrets, never stored in the database.
     """
 
     def __init__(self, *, directory: str | Path, destination_id: str,
                  principal: object, encryption_key: Callable[[], bytes],
                  receipt_key: Callable[[], bytes], authorize: Callable,
-                 consent: Callable, clock: Callable[[], datetime] =
+                 consent: Callable, policy_lease: Callable,
+                 clock: Callable[[], datetime] =
                  lambda: datetime.now(timezone.utc),
                  verify_windows_acl: Callable[[Path], bool] | None = None) -> None:
         if not isinstance(destination_id, str) or not destination_id.strip():
             raise ValueError("destination_id required")
         if principal is None or not all(callable(x) for x in
-              (encryption_key, receipt_key, authorize, consent, clock)):
+              (encryption_key, receipt_key, authorize, consent, policy_lease, clock)):
             raise TypeError("authenticated host principal and live host callbacks required")
         self.directory = _private_directory(directory)
         if os.name == "nt":
@@ -151,6 +165,7 @@ class PrivateSTMReceiver:
         self._receipt_key = receipt_key
         self._authorize = authorize
         self._consent = consent
+        self._policy_lease = policy_lease
         self._clock = clock
         existed = self.database.exists()
         self._initialized = False
@@ -173,6 +188,8 @@ class PrivateSTMReceiver:
                   superseded_by TEXT, erased_at TEXT);
                 CREATE INDEX IF NOT EXISTS records_source ON records(scope_token, source_token);
                 CREATE INDEX IF NOT EXISTS records_turn ON records(scope_token, turn_token);
+                CREATE INDEX IF NOT EXISTS records_expiry ON records(retention_until, idempotency_key)
+                  WHERE erased_at IS NULL;
                 CREATE TABLE IF NOT EXISTS tombstones (
                   scope_token TEXT NOT NULL, source_token TEXT NOT NULL,
                   erased_at TEXT NOT NULL, PRIMARY KEY(scope_token, source_token));
@@ -247,6 +264,28 @@ class PrivateSTMReceiver:
         if allowed is not True or consented is not True:
             raise PermissionError("current host authorization/consent denied")
 
+    @contextmanager
+    def _policy_guard(self, action: str, scope: tuple[str, str, str],
+                      privacy: str | None, source_id: str | None,
+                      target: object | None = None, *, needs_consent: bool = True):
+        """Hold the host's revocation-serialized lease through commit/readback.
+
+        The host must use the SAME lease discipline for external consent
+        withdrawal; synthetic locks only demonstrate the expected protocol.
+        """
+        try:
+            lease = self._policy_lease(self.principal, action, scope, privacy,
+                                       source_id, target)
+        except Exception as exc:
+            raise PermissionError("host policy lease unavailable") from exc
+        if not callable(getattr(lease, "__enter__", None)) or not callable(
+                getattr(lease, "__exit__", None)):
+            raise PermissionError("host policy lease unavailable")
+        with lease:
+            self._allowed(action, scope, privacy, source_id, target,
+                          needs_consent=needs_consent)
+            yield
+
     def _target_until(self, target: object) -> datetime:
         if getattr(target, "destination_id", None) != self.destination_id:
             raise PermissionError("unexpected private destination")
@@ -277,13 +316,15 @@ class PrivateSTMReceiver:
             raise ValueError("STM idempotency key must be an SHA-256 hex digest")
         until = self._target_until(target)
         scope = _scope(row)
-        self._allowed("long_term_export", scope, row["privacy_scope"], row["source_id"], target)
         scope_token = self._token("scope", scope)
         source_token = self._token("source", (scope, row["source_id"]))
         turn_token = self._token("turn", (scope, row["turn_id"]))
         privacy_token = self._token("privacy", (scope, row["privacy_scope"]))
         payload = _canonical(row)
-        with self._connect() as db:
+        with self._policy_guard("long_term_export", scope, row["privacy_scope"],
+                                row["source_id"], target), self._connect() as db:
+            if _time(row["expires_at"]) <= self._now() or until <= self._now():
+                raise PermissionError("source or target expired while awaiting host lease")
             db.execute("BEGIN IMMEDIATE")
             if db.execute("SELECT 1 FROM revoked_scopes WHERE scope_token=?", (scope_token,)).fetchone():
                 raise PermissionError("scope was revoked")
@@ -321,6 +362,13 @@ class PrivateSTMReceiver:
                     db.execute("""UPDATE records SET superseded_by=?
                         WHERE scope_token=? AND turn_token=? AND erased_at IS NULL""",
                         (external_id, scope_token, prior))
+            # Defense in depth against a callback that invalidated its own
+            # initial consent result. Only the shared host policy lease can
+            # close the remaining inter-process check-to-commit race.
+            self._allowed("long_term_export", scope, row["privacy_scope"],
+                          row["source_id"], target)
+            if _time(row["expires_at"]) <= self._now() or until <= self._now():
+                raise PermissionError("source or target expired before commit")
         return {"destination_id": self.destination_id,
                 "source_version_digest": row["source_version_digest"],
                 "idempotency_key": idempotency_key,
@@ -348,8 +396,8 @@ class PrivateSTMReceiver:
                 idempotency_key, external_id, row["source_version_digest"])):
             return False
         scope = _scope(row)
-        self._allowed("long_term_read", scope, row["privacy_scope"], row["source_id"])
-        with self._connect() as db:
+        with self._policy_guard("long_term_read", scope, row["privacy_scope"],
+                                row["source_id"]), self._connect() as db:
             saved = db.execute("SELECT * FROM records WHERE idempotency_key=? AND external_record_id=?",
                                (idempotency_key, external_id)).fetchone()
             if not saved or saved["erased_at"] or saved["superseded_by"]:
@@ -372,11 +420,11 @@ class PrivateSTMReceiver:
         """Authorized target-side erasure and persistent re-ingestion denial."""
         if not isinstance(source_id, str) or not source_id.strip() or len(scope) != 3:
             raise ValueError("exact source and scope required")
-        self._allowed("long_term_delete", scope, None, source_id, needs_consent=False)
         scope_token = self._token("scope", scope)
         source_token = self._token("source", (scope, source_id))
         now = self._now().isoformat()
-        with self._connect() as db:
+        with self._policy_guard("long_term_delete", scope, None, source_id,
+                                needs_consent=False), self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             db.execute("INSERT OR IGNORE INTO tombstones VALUES (?,?,?)",
                        (scope_token, source_token, now))
@@ -389,27 +437,35 @@ class PrivateSTMReceiver:
         """Withdraw an entire governed owner/agent scope, including retries."""
         if len(scope) != 3 or any(not isinstance(x, str) or not x.strip() for x in scope):
             raise ValueError("exact scope required")
-        self._allowed("long_term_revoke", scope, None, None, needs_consent=False)
         token = self._token("scope", scope)
         now = self._now().isoformat()
-        with self._connect() as db:
+        with self._policy_guard("long_term_revoke", scope, None, None,
+                                needs_consent=False), self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             db.execute("INSERT OR IGNORE INTO revoked_scopes VALUES (?,?)", (token, now))
             result = db.execute("""UPDATE records SET ciphertext=NULL, nonce=NULL, erased_at=?
                 WHERE scope_token=? AND erased_at IS NULL""", (now, token))
             return result.rowcount
 
-    def expire_due(self) -> int:
-        """Host-authorized retention sweep; cannot extend an elapsed deadline."""
-        self._allowed("retention_expire", ("*", "*", "*"), None, None,
-                      needs_consent=False)
-        now = self._now().isoformat()
-        with self._connect() as db:
+    def expire_due(self, *, batch_size: int = MAX_EXPIRE_BATCH) -> int:
+        """Host-authorized bounded sweep; raise on a still-due backlog.
+
+        A RetentionIncomplete exception is raised *after* the processed batch
+        commits. The host must alert and repeat until an ordinary integer
+        result indicates a complete pass; a failed run never extends expiry.
+        """
+        if type(batch_size) is not int or not 1 <= batch_size <= MAX_EXPIRE_BATCH:
+            raise ValueError("invalid retention sweep batch size")
+        with self._policy_guard("retention_expire", ("*", "*", "*"), None, None,
+                                needs_consent=False), self._connect() as db:
+            now = self._now().isoformat()
             db.execute("BEGIN IMMEDIATE")
-            # Retention is held in UTC ISO strings with fixed microsecond-free
-            # or microsecond-bearing forms; normalize comparison in Python.
+            # Times are normalized UTC ISO 8601; order narrows the candidate
+            # set, but Python still performs the authoritative time comparison.
             due = db.execute("""SELECT scope_token, source_token, retention_until
-                FROM records WHERE erased_at IS NULL""").fetchall()
+                FROM records WHERE erased_at IS NULL
+                ORDER BY retention_until, idempotency_key LIMIT ?""",
+                (batch_size,)).fetchall()
             expired = [(row["scope_token"], row["source_token"]) for row in due
                        if _time(row["retention_until"]) <= _time(now)]
             count = 0
@@ -419,7 +475,17 @@ class PrivateSTMReceiver:
                 count += db.execute("""UPDATE records SET ciphertext=NULL, nonce=NULL, erased_at=?
                     WHERE scope_token=? AND source_token=? AND erased_at IS NULL""",
                     (now, scope_token, source_token)).rowcount
-            return count
+            # The same source can have multiple versions. One tombstone may
+            # erase all of them; check the live remainder, not a stale extra
+            # candidate, before issuing a backlog alert.
+            next_row = db.execute("""SELECT retention_until FROM records
+                WHERE erased_at IS NULL ORDER BY retention_until, idempotency_key
+                LIMIT 1""").fetchone()
+            incomplete = (next_row is not None
+                          and _time(next_row["retention_until"]) <= _time(now))
+        if incomplete:
+            raise RetentionIncomplete(count)
+        return count
 
 
-__all__ = ["PrivateSTMReceiver", "HISTORICAL_ONLY"]
+__all__ = ["PrivateSTMReceiver", "RetentionIncomplete", "HISTORICAL_ONLY"]
