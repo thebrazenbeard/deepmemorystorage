@@ -28,6 +28,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 HISTORICAL_ONLY = "HISTORICAL_EVIDENCE_ONLY_NOT_CURRENT_MEMORY_OR_AUTHORITY"
 SCHEMA = "STM_HISTORICAL_HANDOFF_CANDIDATE_V1"
 HEX_64 = re.compile(r"[a-f0-9]{64}\Z")
+MAX_CONTENT_BYTES = 262_144  # Match STM's archive content bound.
 REQUIRED = frozenset({
     "schema", "tenant_id", "owner_id", "agent_id", "turn_id",
     "conversation_id", "role", "content", "source_id", "privacy_scope",
@@ -67,6 +68,8 @@ def _record_dict(record: object) -> dict:
     for key in ("turn_id", "conversation_id", "role", "content", "source_id", "privacy_scope"):
         if not isinstance(row[key], str) or not row[key].strip():
             raise ValueError(f"invalid {key}")
+    if len(row["content"].encode("utf-8")) > MAX_CONTENT_BYTES:
+        raise ValueError("historical handoff exceeds maximum content bytes")
     if row["supersedes_id"] is not None and (
         not isinstance(row["supersedes_id"], str) or not row["supersedes_id"].strip()
     ):

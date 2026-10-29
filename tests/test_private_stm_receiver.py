@@ -108,6 +108,14 @@ class PrivateReceiverTests(unittest.TestCase):
         with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM records").fetchone()[0], 1)
 
+    def test_content_limit_matches_stm_utf8_byte_bound(self):
+        receiver = self.receiver()
+        with self.assertRaisesRegex(ValueError, "maximum content bytes"):
+            receiver.submit(exact(content="é" * 131073), target=self.target,
+                            idempotency_key="f" * 64)
+        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM records").fetchone()[0], 0)
+
     def test_wrong_key_payload_digest_or_receipt_fails(self):
         receiver = self.receiver()
         row = exact()
