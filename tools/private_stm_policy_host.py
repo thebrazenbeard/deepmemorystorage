@@ -8,7 +8,7 @@ from a Windows account SID or enables private history collection.
 from __future__ import annotations
 
 import asyncio
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from contextvars import ContextVar
 import hashlib
 import hmac
@@ -81,17 +81,18 @@ class HostPolicyBoundary:
             os.close(fd)
         if os.name == "posix" and self.database.stat().st_mode & 0o077:
             raise PermissionError("host policy database is not owner-only")
-        with sqlite3.connect(self.database, timeout=20) as db:
-            db.execute("PRAGMA journal_mode=WAL")
-            db.execute("PRAGMA synchronous=FULL")
-            db.execute("CREATE TABLE IF NOT EXISTS scopes (tag TEXT PRIMARY KEY, state TEXT NOT NULL CHECK (state IN ('active','withdraw_pending','withdrawn')))")
-            db.execute("CREATE TABLE IF NOT EXISTS key_binding (purpose TEXT PRIMARY KEY, commitment TEXT NOT NULL)")
-            commitment = hmac.new(key, b"private-stm-host-policy-v1:key-binding", hashlib.sha256).hexdigest()
-            saved = db.execute("SELECT commitment FROM key_binding WHERE purpose='scope'").fetchone()
-            if saved and not hmac.compare_digest(saved[0], commitment):
-                raise PermissionError("host policy scope key changed without authorized migration")
-            if not saved:
-                db.execute("INSERT INTO key_binding VALUES ('scope', ?)", (commitment,))
+        with closing(sqlite3.connect(self.database, timeout=20)) as db:
+            with db:
+                db.execute("PRAGMA journal_mode=WAL")
+                db.execute("PRAGMA synchronous=FULL")
+                db.execute("CREATE TABLE IF NOT EXISTS scopes (tag TEXT PRIMARY KEY, state TEXT NOT NULL CHECK (state IN ('active','withdraw_pending','withdrawn')))")
+                db.execute("CREATE TABLE IF NOT EXISTS key_binding (purpose TEXT PRIMARY KEY, commitment TEXT NOT NULL)")
+                commitment = hmac.new(key, b"private-stm-host-policy-v1:key-binding", hashlib.sha256).hexdigest()
+                saved = db.execute("SELECT commitment FROM key_binding WHERE purpose='scope'").fetchone()
+                if saved and not hmac.compare_digest(saved[0], commitment):
+                    raise PermissionError("host policy scope key changed without authorized migration")
+                if not saved:
+                    db.execute("INSERT INTO key_binding VALUES ('scope', ?)", (commitment,))
 
     def _auth(self, principal, action, scope):
         if (action == "retention_expire" and scope == ("*", "*", "*")

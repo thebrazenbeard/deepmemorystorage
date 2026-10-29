@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from private_stm_policy_host import HostPolicyBoundary
-from test_private_stm_receiver import exact, NOW, SCOPE, OTHER, synthetic_windows_acl
+from test_private_stm_receiver import exact, NOW, SCOPE, OTHER, synthetic_windows_acl, test_db
 
 
 class AtomicHostPolicyTests(unittest.TestCase):
@@ -109,7 +109,7 @@ class AtomicHostPolicyTests(unittest.TestCase):
             self._write("b")
         with self.assertRaises(PermissionError):
             self.boundary.grant_once()
-        with sqlite3.connect(self.receiver.database) as db:
+        with test_db(self.receiver.database) as db:
             self.assertIsNone(db.execute("SELECT ciphertext FROM records").fetchone()[0])
 
     def test_revoke_failure_persists_fail_closed_pending_state_until_retry(self):
@@ -129,7 +129,7 @@ class AtomicHostPolicyTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             self._write("c")
         # Ciphertext remains pending erasure but cannot be read or re-ingested.
-        with sqlite3.connect(self.receiver.database) as db:
+        with test_db(self.receiver.database) as db:
             self.assertIsNotNone(db.execute("SELECT ciphertext FROM records").fetchone()[0])
         # Simulate a fresh service instance after the crashed erasure step.
         recovered = HostPolicyBoundary(directory=self.path, principal=self.principal,
@@ -143,7 +143,7 @@ class AtomicHostPolicyTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             recovered_receiver.submit(exact(), target=self.target, idempotency_key="d" * 64)
         self.assertEqual(recovered.withdraw_and_revoke(), 1)
-        with sqlite3.connect(self.receiver.database) as db:
+        with test_db(self.receiver.database) as db:
             self.assertIsNone(db.execute("SELECT ciphertext FROM records").fetchone()[0])
 
     def test_threaded_withdrawal_waits_for_consent_locked_write(self):
@@ -191,7 +191,7 @@ class AtomicHostPolicyTests(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertFalse(writer.is_alive() or revoker.is_alive())
         self.assertTrue(withdrawn.is_set())
-        with sqlite3.connect(self.receiver.database) as db:
+        with test_db(self.receiver.database) as db:
             self.assertIsNone(db.execute("SELECT ciphertext FROM records").fetchone()[0])
 
     def test_copied_context_cannot_reuse_other_threads_transaction(self):

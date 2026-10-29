@@ -1,5 +1,6 @@
 """Synthetic-only private-receiver acceptance and negative boundary tests."""
 
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -20,6 +21,17 @@ from private_stm_receiver import PrivateSTMReceiver, RetentionIncomplete, HISTOR
 NOW = datetime(2026, 10, 29, 12, 0, tzinfo=timezone.utc)
 SCOPE = ("tenant-a", "owner-a", "agent-a")
 OTHER = ("tenant-a", "owner-b", "agent-a")
+
+
+@contextmanager
+def test_db(path):
+    """Preserve transaction semantics and release test SQLite handles on Windows."""
+    db = sqlite3.connect(path)
+    try:
+        with db:
+            yield db
+    finally:
+        db.close()
 
 
 def synthetic_windows_acl(_path):
@@ -112,7 +124,7 @@ class PrivateReceiverTests(unittest.TestCase):
         )
         with self.assertRaises(PermissionError):
             receiver.submit(exact(), target=self.target, idempotency_key="e" * 64)
-        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+        with test_db(self.path / "private_stm.sqlite3") as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM records").fetchone()[0], 0)
 
     def test_withdrawal_during_initial_consent_callback_rolls_back_write(self):
@@ -128,7 +140,7 @@ class PrivateReceiverTests(unittest.TestCase):
         receiver = self.receiver()
         with self.assertRaises(PermissionError):
             receiver.submit(exact(), target=self.target, idempotency_key="d" * 64)
-        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+        with test_db(self.path / "private_stm.sqlite3") as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM records").fetchone()[0], 0)
 
     def test_host_lease_serializes_withdrawal_then_tombstones_inflight_write(self):
@@ -180,14 +192,14 @@ class PrivateReceiverTests(unittest.TestCase):
         self.assertNotIn("error", outcomes)
         self.assertIn("receipt", outcomes)
         self.assertTrue(revoker_acquired.is_set())
-        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+        with test_db(self.path / "private_stm.sqlite3") as db:
             self.assertIsNone(db.execute("SELECT ciphertext FROM records").fetchone()[0])
 
     def test_synthetic_durable_handoff_and_independent_reopen_readback(self):
         record = exact()
         key = "a" * 64
         first = self.receiver().submit(record, target=self.target, idempotency_key=key)
-        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+        with test_db(self.path / "private_stm.sqlite3") as db:
             encrypted, nonce = db.execute("SELECT ciphertext, nonce FROM records").fetchone()
         self.assertNotIn(record.content.encode("utf-8"), encrypted)
         self.assertEqual(len(nonce), 12)
@@ -196,7 +208,7 @@ class PrivateReceiverTests(unittest.TestCase):
         self.assertTrue(new_instance.verify_receipt(first, record, key))
         second = new_instance.submit(record, target=self.target, idempotency_key=key)
         self.assertEqual(first, second)
-        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+        with test_db(self.path / "private_stm.sqlite3") as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM records").fetchone()[0], 1)
 
     def test_content_limit_matches_stm_utf8_byte_bound(self):
@@ -204,7 +216,7 @@ class PrivateReceiverTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "maximum content bytes"):
             receiver.submit(exact(content="é" * 131073), target=self.target,
                             idempotency_key="f" * 64)
-        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+        with test_db(self.path / "private_stm.sqlite3") as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM records").fetchone()[0], 0)
 
     def test_wrong_key_payload_digest_or_receipt_fails(self):
@@ -258,7 +270,7 @@ class PrivateReceiverTests(unittest.TestCase):
         self.assertFalse(receiver.verify_receipt(receipt, row, key))
         with self.assertRaises(PermissionError):
             receiver.submit(row, target=self.target, idempotency_key=key)
-        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+        with test_db(self.path / "private_stm.sqlite3") as db:
             self.assertEqual(db.execute("SELECT ciphertext, nonce FROM records").fetchone(),
                              (None, None))
 
@@ -271,7 +283,7 @@ class PrivateReceiverTests(unittest.TestCase):
         self.assertEqual(receiver.revoke_scope(scope=SCOPE), 2)
         with self.assertRaises(PermissionError):
             self.receiver().submit(first, target=self.target, idempotency_key="2" * 64)
-        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+        with test_db(self.path / "private_stm.sqlite3") as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM records WHERE ciphertext IS NOT NULL").fetchone()[0], 0)
 
     def test_fresh_consent_withdrawal_blocks_read_and_retry_then_allows_revocation(self):
@@ -308,7 +320,7 @@ class PrivateReceiverTests(unittest.TestCase):
         corrected = receiver.submit(correction, target=self.target, idempotency_key="5" * 64)
         self.assertFalse(receiver.verify_receipt(old_receipt, first, "4" * 64))
         self.assertTrue(receiver.verify_receipt(corrected, correction, "5" * 64))
-        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+        with test_db(self.path / "private_stm.sqlite3") as db:
             self.assertEqual(db.execute("SELECT superseded_by FROM records WHERE idempotency_key=?",
                                         ("4" * 64,)).fetchone()[0], corrected["external_record_id"])
 
@@ -320,7 +332,7 @@ class PrivateReceiverTests(unittest.TestCase):
         self.assertFalse(receiver.verify_receipt(receipt, row, "6" * 64))
         self.assertEqual(receiver.expire_due(), 1)
         self.assertEqual(receiver.expire_due(), 0)
-        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+        with test_db(self.path / "private_stm.sqlite3") as db:
             self.assertIsNone(db.execute("SELECT ciphertext FROM records").fetchone()[0])
 
     def test_expiration_is_bounded_restartable_and_alerts_on_backlog(self):
@@ -333,7 +345,7 @@ class PrivateReceiverTests(unittest.TestCase):
         with self.assertRaises(RetentionIncomplete) as raised:
             receiver.expire_due(batch_size=2)
         self.assertEqual(raised.exception.processed, 2)
-        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+        with test_db(self.path / "private_stm.sqlite3") as db:
             self.assertEqual(db.execute(
                 "SELECT COUNT(*) FROM records WHERE erased_at IS NULL").fetchone()[0], 1)
         self.assertEqual(receiver.expire_due(batch_size=2), 1)
@@ -353,7 +365,7 @@ class PrivateReceiverTests(unittest.TestCase):
         with self.assertRaises(RetentionIncomplete) as raised:
             receiver.expire_due(batch_size=1)
         self.assertEqual(raised.exception.processed, 1)
-        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+        with test_db(self.path / "private_stm.sqlite3") as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM tombstones").fetchone()[0], 1)
             self.assertEqual(db.execute(
                 "SELECT COUNT(*) FROM records WHERE erased_at IS NULL").fetchone()[0], 1)
@@ -377,7 +389,7 @@ class PrivateReceiverTests(unittest.TestCase):
         with self.assertRaises(RetentionIncomplete) as raised:
             receiver.expire_due(batch_size=1)
         self.assertEqual(raised.exception.processed, 1)
-        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+        with test_db(self.path / "private_stm.sqlite3") as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM tombstones").fetchone()[0], 1)
             self.assertEqual(db.execute(
                 "SELECT COUNT(*) FROM records WHERE ciphertext IS NOT NULL").fetchone()[0], 1)
@@ -392,7 +404,7 @@ class PrivateReceiverTests(unittest.TestCase):
         self.now = self.target.retention_until
         self.assertEqual(self.receiver().expire_due(batch_size=1), 1)
         self.assertEqual(receiver.expire_due(batch_size=1), 0)
-        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+        with test_db(self.path / "private_stm.sqlite3") as db:
             self.assertEqual(db.execute(
                 "SELECT COUNT(*) FROM records WHERE ciphertext IS NOT NULL").fetchone()[0], 0)
 
@@ -408,7 +420,7 @@ class PrivateReceiverTests(unittest.TestCase):
                 counts.append(receiver.expire_due(batch_size=3))
             except RetentionIncomplete as incomplete:
                 counts.append(incomplete.processed)
-            with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+            with test_db(self.path / "private_stm.sqlite3") as db:
                 self.assertEqual(db.execute(
                     "SELECT COUNT(*) FROM records WHERE erased_at IS NOT NULL"
                 ).fetchone()[0], sum(counts))
@@ -418,7 +430,7 @@ class PrivateReceiverTests(unittest.TestCase):
     def test_empty_tombstone_backlog_starts_at_tombstones_not_active_records(self):
         receiver = self.receiver()
         future = (self.target.retention_until + timedelta(days=40)).isoformat()
-        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+        with test_db(self.path / "private_stm.sqlite3") as db:
             # A large, entirely synthetic future-retention fixture. It does
             # not create valid encrypted content or touch any private archive.
             db.executemany("""INSERT INTO records
@@ -446,7 +458,7 @@ class PrivateReceiverTests(unittest.TestCase):
                                     for step in details), details)
                 self.assertFalse(any("SCAN r" in step for step in details), details)
         self.assertEqual(receiver.expire_due(batch_size=1), 0)
-        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+        with test_db(self.path / "private_stm.sqlite3") as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM records WHERE erased_at IS NULL"
                                         ).fetchone()[0], 100000)
 
