@@ -334,17 +334,114 @@ class PrivateReceiverTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             receiver.expire_due(batch_size=0)
 
-    def test_expiration_same_source_versions_do_not_raise_false_backlog(self):
+    def test_expiration_same_source_versions_respects_mutation_batch(self):
         receiver = self.receiver()
         for i in range(2):
             receiver.submit(exact(turn_id=f"corrected-turn-{i}",
                                   source_id="host:synthetic:shared-source"),
                             target=self.target, idempotency_key=str(i + 7) * 64)
         self.now = self.target.retention_until
-        # One source tombstone erases both versions, even though the candidate
-        # query is bounded to one row. No due ciphertext remains to alert on.
-        self.assertEqual(receiver.expire_due(batch_size=1), 2)
+        # A source-wide tombstone blocks read/re-ingestion immediately, but no
+        # single bounded sweep may physically mutate both versions at once.
+        with self.assertRaises(RetentionIncomplete) as raised:
+            receiver.expire_due(batch_size=1)
+        self.assertEqual(raised.exception.processed, 1)
+        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM tombstones").fetchone()[0], 1)
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM records WHERE erased_at IS NULL").fetchone()[0], 1)
+        self.assertEqual(self.receiver().expire_due(batch_size=1), 1)
         self.assertEqual(receiver.expire_due(batch_size=1), 0)
+
+    def test_expiration_tombstone_denies_future_version_until_bounded_cleanup(self):
+        receiver = self.receiver()
+        source = "host:synthetic:multi-version"
+        first = exact(turn_id="early", source_id=source)
+        later = exact(turn_id="later", source_id=source)
+        early_receipt = receiver.submit(first, target=self.target,
+                                        idempotency_key="a" * 64)
+        later_target = SimpleNamespace(**{
+            **vars(self.target),
+            "retention_until": self.target.retention_until + timedelta(days=30),
+        })
+        later_receipt = receiver.submit(later, target=later_target,
+                                        idempotency_key="b" * 64)
+        self.now = self.target.retention_until
+        with self.assertRaises(RetentionIncomplete) as raised:
+            receiver.expire_due(batch_size=1)
+        self.assertEqual(raised.exception.processed, 1)
+        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM tombstones").fetchone()[0], 1)
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM records WHERE ciphertext IS NOT NULL").fetchone()[0], 1)
+        # Future version's target retention has not elapsed; its source was
+        # nevertheless tombstoned. It must not remain logically readable.
+        self.assertFalse(receiver.verify_receipt(later_receipt, later, "b" * 64))
+        self.assertFalse(receiver.verify_receipt(early_receipt, first, "a" * 64))
+        # Even a synthetic clock rollback cannot resurrect the source token.
+        self.now = NOW
+        with self.assertRaises(PermissionError):
+            receiver.submit(later, target=later_target, idempotency_key="b" * 64)
+        self.now = self.target.retention_until
+        self.assertEqual(self.receiver().expire_due(batch_size=1), 1)
+        self.assertEqual(receiver.expire_due(batch_size=1), 0)
+        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+            self.assertEqual(db.execute(
+                "SELECT COUNT(*) FROM records WHERE ciphertext IS NOT NULL").fetchone()[0], 0)
+
+    def test_expiration_many_versions_mutates_no_more_than_batch(self):
+        receiver = self.receiver()
+        for i in range(11):
+            receiver.submit(exact(turn_id=f"v{i}", source_id="host:synthetic:many"),
+                            target=self.target, idempotency_key=f"{i:064x}")
+        self.now = self.target.retention_until
+        counts = []
+        for _ in range(4):
+            try:
+                counts.append(receiver.expire_due(batch_size=3))
+            except RetentionIncomplete as incomplete:
+                counts.append(incomplete.processed)
+            with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+                self.assertEqual(db.execute(
+                    "SELECT COUNT(*) FROM records WHERE erased_at IS NOT NULL"
+                ).fetchone()[0], sum(counts))
+        self.assertEqual(counts, [3, 3, 3, 2])
+        self.assertEqual(self.receiver().expire_due(batch_size=3), 0)
+
+    def test_empty_tombstone_backlog_starts_at_tombstones_not_active_records(self):
+        receiver = self.receiver()
+        future = (self.target.retention_until + timedelta(days=40)).isoformat()
+        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+            # A large, entirely synthetic future-retention fixture. It does
+            # not create valid encrypted content or touch any private archive.
+            db.executemany("""INSERT INTO records
+                (idempotency_key,external_record_id,scope_token,source_token,
+                 turn_token,privacy_token,source_version_digest,nonce,
+                 ciphertext,retention_until) VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                ((f"{i:064x}", f"dms:synthetic:{i}", "scope", f"source-{i}",
+                  "turn", "privacy", "digest", b"0" * 12, b"sealed", future)
+                 for i in range(100000)))
+            plans = (
+                db.execute("""EXPLAIN QUERY PLAN SELECT 1 FROM tombstones AS t
+                    CROSS JOIN records AS r INDEXED BY records_source
+                    ON r.scope_token=t.scope_token AND r.source_token=t.source_token
+                    WHERE r.erased_at IS NULL LIMIT 1""").fetchall(),
+                db.execute("""EXPLAIN QUERY PLAN SELECT r.idempotency_key
+                    FROM tombstones AS t CROSS JOIN records AS r INDEXED BY records_source
+                    ON r.scope_token=t.scope_token AND r.source_token=t.source_token
+                    WHERE r.erased_at IS NULL AND r.retention_until > ? LIMIT 1""",
+                    (NOW.isoformat(),)).fetchall(),
+            )
+            for plan in plans:
+                details = [step[3] for step in plan]
+                self.assertTrue(any("SCAN t" in step for step in details), details)
+                self.assertTrue(any("SEARCH r USING INDEX records_source" in step
+                                    for step in details), details)
+                self.assertFalse(any("SCAN r" in step for step in details), details)
+        self.assertEqual(receiver.expire_due(batch_size=1), 0)
+        with sqlite3.connect(self.path / "private_stm.sqlite3") as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM records WHERE erased_at IS NULL"
+                                        ).fetchone()[0], 100000)
 
     def test_public_git_root_is_not_a_private_vault(self):
         checkout = Path(__file__).resolve().parents[1]

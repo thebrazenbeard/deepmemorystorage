@@ -448,41 +448,61 @@ class PrivateSTMReceiver:
             return result.rowcount
 
     def expire_due(self, *, batch_size: int = MAX_EXPIRE_BATCH) -> int:
-        """Host-authorized bounded sweep; raise on a still-due backlog.
+        """Host-authorized sweep of at most ``batch_size`` record mutations.
 
         A RetentionIncomplete exception is raised *after* the processed batch
         commits. The host must alert and repeat until an ordinary integer
         result indicates a complete pass; a failed run never extends expiry.
+        The first expired version tombstones its source immediately, denying
+        reads/re-ingestion of other versions while their ciphertext is erased
+        in subsequent bounded batches.
         """
         if type(batch_size) is not int or not 1 <= batch_size <= MAX_EXPIRE_BATCH:
             raise ValueError("invalid retention sweep batch size")
         with self._policy_guard("retention_expire", ("*", "*", "*"), None, None,
                                 needs_consent=False), self._connect() as db:
-            now = self._now().isoformat()
+            now_dt = self._now()
+            now = now_dt.isoformat()
             db.execute("BEGIN IMMEDIATE")
-            # Times are normalized UTC ISO 8601; order narrows the candidate
-            # set, but Python still performs the authoritative time comparison.
-            due = db.execute("""SELECT scope_token, source_token, retention_until
-                FROM records WHERE erased_at IS NULL
-                ORDER BY retention_until, idempotency_key LIMIT ?""",
-                (batch_size,)).fetchall()
-            expired = [(row["scope_token"], row["source_token"]) for row in due
-                       if _time(row["retention_until"]) <= _time(now)]
+            # Target timestamps are normalized UTC ISO 8601 by submit(). Use
+            # the indexed expiry path first, then fill the remaining budget
+            # from source-tombstoned versions (including future-retention ones).
+            # The two sets are disjoint, keeping record mutations <= batch_size.
+            due = db.execute("""SELECT idempotency_key, scope_token, source_token,
+                    retention_until FROM records WHERE erased_at IS NULL
+                    AND retention_until <= ?
+                    ORDER BY retention_until, idempotency_key LIMIT ?""",
+                    (now, batch_size)).fetchall()
+            remaining = batch_size - len(due)
+            tombstoned = db.execute("""SELECT r.idempotency_key
+                    FROM tombstones AS t CROSS JOIN records AS r INDEXED BY records_source
+                      ON r.scope_token=t.scope_token AND r.source_token=t.source_token
+                    WHERE r.erased_at IS NULL AND r.retention_until > ?
+                    LIMIT ?""",
+                    (now, remaining)).fetchall() if remaining else ()
             count = 0
-            for scope_token, source_token in expired:
+            for row in due:
+                if _time(row["retention_until"]) > now_dt:
+                    raise ValueError("uncanonical stored retention deadline")
                 db.execute("INSERT OR IGNORE INTO tombstones VALUES (?,?,?)",
-                           (scope_token, source_token, now))
-                count += db.execute("""UPDATE records SET ciphertext=NULL, nonce=NULL, erased_at=?
-                    WHERE scope_token=? AND source_token=? AND erased_at IS NULL""",
-                    (now, scope_token, source_token)).rowcount
-            # The same source can have multiple versions. One tombstone may
-            # erase all of them; check the live remainder, not a stale extra
-            # candidate, before issuing a backlog alert.
-            next_row = db.execute("""SELECT retention_until FROM records
-                WHERE erased_at IS NULL ORDER BY retention_until, idempotency_key
-                LIMIT 1""").fetchone()
-            incomplete = (next_row is not None
-                          and _time(next_row["retention_until"]) <= _time(now))
+                           (row["scope_token"], row["source_token"], now))
+                count += db.execute("""UPDATE records
+                    SET ciphertext=NULL, nonce=NULL, erased_at=?
+                    WHERE idempotency_key=? AND erased_at IS NULL""",
+                    (now, row["idempotency_key"])).rowcount
+            for row in tombstoned:
+                count += db.execute("""UPDATE records
+                    SET ciphertext=NULL, nonce=NULL, erased_at=?
+                    WHERE idempotency_key=? AND erased_at IS NULL""",
+                    (now, row["idempotency_key"])).rowcount
+            # A due row or an uncleared tombstone means more work. The second
+            # probe includes future-retention versions for a tombstoned source.
+            incomplete = (db.execute("""SELECT 1 FROM records
+                WHERE erased_at IS NULL AND retention_until <= ? LIMIT 1""",
+                (now,)).fetchone() is not None or db.execute("""SELECT 1
+                FROM tombstones AS t CROSS JOIN records AS r INDEXED BY records_source
+                  ON r.scope_token=t.scope_token AND r.source_token=t.source_token
+                WHERE r.erased_at IS NULL LIMIT 1""").fetchone() is not None)
         if incomplete:
             raise RetentionIncomplete(count)
         return count
