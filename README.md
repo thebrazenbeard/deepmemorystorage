@@ -35,6 +35,13 @@ Pass-specific files under `index/` remain useful audit/retrieval aids. Each comp
 
 A tranche filename does not create a weaker or stronger memory class. Each row's own `memory_class`, historical canonicity, provenance ceiling, privacy scope, currentness rule, governed-admission boundary, and disposition control its use.
 
+## STM private historical handoff boundary (2026-10-28)
+
+The user-selected source lifecycle for new opt-in Vera conversation records is **day-30 review eligibility, day-45 local expiration**. Eligibility is not automatic preservation. A failed or pending handoff cannot extend the local deadline. The `thebrazenbeard/stm` `DeepMemoryHandoff` interface is an injected writer/receipt contract, **not** a qualified DeepMemoryStorage ingestion service.
+
+This GitHub repository is public and its historical ledger is append-only. It must **never** be used as a private transcript dump or hidden auto-sync target. No privacy-respecting STM-to-DMS long-term writer, independent acceptance receipt, source-to-target correction/delete/revocation propagation, encrypted vault, or target retention controller has been established by these repository sources.
+
+To qualify a private destination, implement and verify an isolated host-owned storage instance, enforce exact scope and current consent, define separate target retention, prove durable idempotent writes and independently readable receipts, and demonstrate target correction, revocation and deletion while preserving provenance and nonpromotion semantics. Cross-machine transport and OS backups are separate qualification obligations. Do not silently treat historical evidence as current Vera identity, authority or model training input.
 ## Relationship to current memory
 
 The current/cross-chat memory architecture in `thebrazenbeard/vera` is a separate mutable/current lineage system. Deep Memory does not silently project into it.
