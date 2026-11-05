@@ -85,6 +85,8 @@ def _record_dict(record: object) -> dict:
         not isinstance(row["supersedes_id"], str) or not row["supersedes_id"].strip()
     ):
         raise ValueError("invalid supersedes_id")
+    if row["supersedes_id"] == row["turn_id"]:
+        raise ValueError("a turn cannot supersede itself")
     _time(row["event_time"])
     _time(row["recorded_at"])
     if row["expires_at"] is not None:
@@ -359,6 +361,21 @@ class PrivateSTMReceiver:
                      ciphertext, until.isoformat()))
                 if row["supersedes_id"]:
                     prior = self._token("turn", (scope, row["supersedes_id"]))
+                    # Scope alone is not a sufficient correction boundary: a
+                    # principal may own multiple independent conversations.
+                    # Check the authenticated, encrypted predecessor payloads
+                    # before allowing a turn-id correction to retire them.
+                    # A mismatched conversation is an integrity failure; the
+                    # enclosing transaction must roll back the new record too.
+                    predecessors = db.execute("""SELECT idempotency_key, nonce, ciphertext
+                        FROM records WHERE scope_token=? AND turn_token=?
+                        AND erased_at IS NULL""", (scope_token, prior)).fetchall()
+                    for predecessor in predecessors:
+                        original = json.loads(AESGCM(self._key(self._encryption_key)).decrypt(
+                            predecessor["nonce"], predecessor["ciphertext"],
+                            predecessor["idempotency_key"].encode("ascii")))
+                        if original.get("conversation_id") != row["conversation_id"]:
+                            raise PermissionError("cross-conversation correction denied")
                     db.execute("""UPDATE records SET superseded_by=?
                         WHERE scope_token=? AND turn_token=? AND erased_at IS NULL""",
                         (external_id, scope_token, prior))

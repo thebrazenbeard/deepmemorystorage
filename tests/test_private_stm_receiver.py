@@ -324,6 +324,27 @@ class PrivateReceiverTests(unittest.TestCase):
             self.assertEqual(db.execute("SELECT superseded_by FROM records WHERE idempotency_key=?",
                                         ("4" * 64,)).fetchone()[0], corrected["external_record_id"])
 
+    def test_correction_cannot_supersede_unrelated_conversation(self):
+        receiver = self.receiver()
+        first = exact(conversation_id="conversation-a")
+        first_receipt = receiver.submit(first, target=self.target,
+                                        idempotency_key="a" * 64)
+        unrelated = exact(turn_id="turn-2", conversation_id="conversation-b",
+                          source_id="host:synthetic:turn-2", supersedes_id="turn-1")
+        with self.assertRaisesRegex(PermissionError, "cross-conversation"):
+            receiver.submit(unrelated, target=self.target, idempotency_key="b" * 64)
+        self.assertTrue(receiver.verify_receipt(first_receipt, first, "a" * 64))
+        with test_db(self.path / "private_stm.sqlite3") as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM records").fetchone()[0], 1)
+
+    def test_self_supersession_cannot_make_new_record_unreadable(self):
+        receiver = self.receiver()
+        row = exact(supersedes_id="turn-1")
+        with self.assertRaisesRegex(ValueError, "cannot supersede itself"):
+            receiver.submit(row, target=self.target, idempotency_key="c" * 64)
+        with test_db(self.path / "private_stm.sqlite3") as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM records").fetchone()[0], 0)
+
     def test_retention_removes_expired_content_without_extending_deadline(self):
         receiver = self.receiver()
         row = exact()
