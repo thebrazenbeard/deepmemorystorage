@@ -369,7 +369,14 @@ class PrivateSTMReceiver:
                     # enclosing transaction must roll back the new record too.
                     predecessors = db.execute("""SELECT idempotency_key, nonce, ciphertext
                         FROM records WHERE scope_token=? AND turn_token=?
-                        AND erased_at IS NULL""", (scope_token, prior)).fetchall()
+                        AND erased_at IS NULL AND superseded_by IS NULL""",
+                        (scope_token, prior)).fetchall()
+                    if len(predecessors) != 1:
+                        # An absent, erased, previously superseded or ambiguous
+                        # predecessor cannot authorize a correction edge.
+                        # Otherwise out-of-order writes and competing forks
+                        # can each claim to replace the same historical turn.
+                        raise PermissionError("correction predecessor unavailable or ambiguous")
                     for predecessor in predecessors:
                         original = json.loads(AESGCM(self._key(self._encryption_key)).decrypt(
                             predecessor["nonce"], predecessor["ciphertext"],
@@ -377,7 +384,8 @@ class PrivateSTMReceiver:
                         if original.get("conversation_id") != row["conversation_id"]:
                             raise PermissionError("cross-conversation correction denied")
                     db.execute("""UPDATE records SET superseded_by=?
-                        WHERE scope_token=? AND turn_token=? AND erased_at IS NULL""",
+                        WHERE scope_token=? AND turn_token=? AND erased_at IS NULL
+                        AND superseded_by IS NULL""",
                         (external_id, scope_token, prior))
             # Defense in depth against a callback that invalidated its own
             # initial consent result. Only the shared host policy lease can

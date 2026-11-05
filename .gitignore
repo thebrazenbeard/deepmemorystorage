@@ -5,4 +5,5 @@ __pycache__/
 *.sqlite3-shm
 *.pem
 *.key
-.env
+config.bat
+node_modules
