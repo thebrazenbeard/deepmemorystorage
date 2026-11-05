@@ -345,6 +345,30 @@ class PrivateReceiverTests(unittest.TestCase):
         with test_db(self.path / "private_stm.sqlite3") as db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM records").fetchone()[0], 0)
 
+    def test_correction_requires_one_live_predecessor(self):
+        receiver = self.receiver()
+        missing = exact(turn_id="turn-2", supersedes_id="never-ingested",
+                        source_id="host:synthetic:turn-2")
+        with self.assertRaisesRegex(PermissionError, "predecessor unavailable"):
+            receiver.submit(missing, target=self.target, idempotency_key="d" * 64)
+        with test_db(self.path / "private_stm.sqlite3") as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM records").fetchone()[0], 0)
+
+    def test_correction_cannot_fork_an_already_superseded_turn(self):
+        receiver = self.receiver()
+        first = exact()
+        receiver.submit(first, target=self.target, idempotency_key="d" * 64)
+        second = exact(turn_id="turn-2", source_id="host:synthetic:turn-2",
+                       supersedes_id="turn-1")
+        receipt = receiver.submit(second, target=self.target, idempotency_key="e" * 64)
+        fork = exact(turn_id="turn-3", source_id="host:synthetic:turn-3",
+                     supersedes_id="turn-1")
+        with self.assertRaisesRegex(PermissionError, "predecessor unavailable"):
+            receiver.submit(fork, target=self.target, idempotency_key="f" * 64)
+        self.assertTrue(receiver.verify_receipt(receipt, second, "e" * 64))
+        with test_db(self.path / "private_stm.sqlite3") as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM records").fetchone()[0], 2)
+
     def test_retention_removes_expired_content_without_extending_deadline(self):
         receiver = self.receiver()
         row = exact()
