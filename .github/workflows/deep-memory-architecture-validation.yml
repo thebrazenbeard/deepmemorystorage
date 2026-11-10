@@ -8,6 +8,9 @@ on:
       - "schema/**"
       - "architecture/**"
       - "tools/**"
+      - "tests/**"
+      - ".vscode/**"
+      - "public/fonts/**"
       - ".github/workflows/deep-memory-architecture-validation.yml"
   push:
     branches: [main]
@@ -17,6 +20,9 @@ on:
       - "schema/**"
       - "architecture/**"
       - "tools/**"
+      - "tests/**"
+      - ".vscode/**"
+      - "public/fonts/**"
       - ".github/workflows/deep-memory-architecture-validation.yml"
 
 permissions:
