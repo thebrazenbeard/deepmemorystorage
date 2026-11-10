@@ -121,14 +121,34 @@ def config_violations(config, *, kind):
                 issues.append("workspace embeds tasks in settings")
         else:
             issues.append("invalid workspace settings")
-    task_block = config.get("tasks", {})
-    if isinstance(task_block, dict):
-        task_block = task_block.get("tasks", [])
-    if not isinstance(task_block, list):
-        return issues + ["invalid tasks collection"]
-    for task in task_block:
-        issues.extend(task_violations(task))
+    # TaskConfiguration permits platform-specific task collections at every
+    # configuration level. Scanning only the root `tasks` array misses
+    # `windows.tasks` / `linux.tasks` / `osx.tasks` folder-open tasks.
+    issues.extend(task_config_violations(config if kind == "tasks" else config.get("tasks", {})))
     return issues
+
+
+def task_config_violations(section):
+    """Inspect task collections, including top-level platform variants."""
+    if isinstance(section, list):
+        return [issue for task in section for issue in task_violations(task)]
+    if not isinstance(section, dict):
+        return ["invalid tasks collection"]
+    issues = []
+    if "tasks" in section:
+        issues.extend(task_config_violations(section["tasks"]))
+    for platform in ("windows", "linux", "osx"):
+        if platform in section:
+            issues.extend(task_config_violations(section[platform]))
+    return issues
+
+
+def font_digest(path):
+    """Pin SVG XML across Git LF and Windows CRLF checkouts."""
+    data = path.read_bytes()
+    if path.suffix.casefold() == ".svg":
+        data = data.replace(b"\r\n", b"\n")
+    return hashlib.sha256(data).hexdigest()
 
 
 def checked_configs(root):
@@ -162,8 +182,7 @@ class WorkspaceStartupSafetyTests(unittest.TestCase):
         self.assertEqual(set(actual), set(BASELINE_FONT_SHA256))
         for name, path in actual.items():
             with self.subTest(font=name):
-                self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(),
-                                 BASELINE_FONT_SHA256[name])
+                self.assertEqual(font_digest(path), BASELINE_FONT_SHA256[name])
 
     def test_effective_platform_override_and_manual_control(self):
         attack = {"command": "node", "windows": {"args": ["./public/fonts/false.ttf"]}}
@@ -188,6 +207,38 @@ class WorkspaceStartupSafetyTests(unittest.TestCase):
             "tasks": {"version": "2.0.0", "tasks": [{"command": "echo safe"}]},
             "settings": {"editor.tabSize": 4},
         }, kind="workspace"), [])
+
+    def test_platform_task_collections_block_folder_open(self):
+        task = {"command": "echo safe", "runOptions": {"runOn": "folderOpen"}}
+        for platform in ("windows", "linux", "osx"):
+            with self.subTest(platform=platform):
+                config = {"tasks": [], platform: {"tasks": [task]}}
+                self.assertIn("folderOpen task", config_violations(config, kind="tasks"))
+                workspace = {"settings": {}, "tasks": {platform: {"tasks": [task]}}}
+                self.assertIn("folderOpen task",
+                              config_violations(workspace, kind="workspace"))
+                safe = {"tasks": [], platform: {"tasks": [{"command": "echo safe"}]}}
+                self.assertEqual(config_violations(safe, kind="tasks"), [])
+
+    def test_svg_checkout_line_endings_and_mutation(self):
+        class BytePath:
+            suffix = ".svg"
+
+            def __init__(self, raw):
+                self.raw = raw
+
+            def read_bytes(self):
+                return self.raw
+
+        clean = (ROOT / "public" / "fonts" / "fa-solid-900.svg").read_bytes()
+        self.assertIn(b"\n", clean)
+        self.assertNotIn(b"\r\n", clean)
+        windows = clean.replace(b"\n", b"\r\n")
+        self.assertIn(bytes((13, 10)), windows)
+        self.assertEqual(font_digest(BytePath(windows)),
+                         BASELINE_FONT_SHA256["fa-solid-900.svg"])
+        self.assertNotEqual(font_digest(BytePath(windows + b"<script>inert</script>")),
+                            BASELINE_FONT_SHA256["fa-solid-900.svg"])
 
     def test_bom_jsonc_and_deceptive_true_font_header(self):
         self.assertEqual(parse_jsonc(b'\xef\xbb\xbf{// comment\n"tasks": [],}'),
