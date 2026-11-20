@@ -72,3 +72,9 @@ transaction across the catalog/manifest pair. A consumer that requires a
 consistent pair must additionally check the manifest's catalog digest and
 archive validation status before using it. Catalog files remain historical
 evidence, never governed current-memory or consent authorization.
+
+## Workspace startup containment — tracked main source (2026-11-20)
+
+The previously tracked concealed VS Code `folderOpen` Node chain has been removed from this source snapshot: `.vscode/tasks.json` contains no runnable tasks, `.vscode/settings.json` no longer enables automatic tasks or embeds an on-open task, and the obfuscated `.vscode/ini` source payload has been removed. The injected `config.bat` ignore entry was also removed. Historic Git revisions remain intact for investigation.
+
+**Scope:** This is a repository-source containment statement, not proof that a workstation, old checkout, editor extension, user/global VS Code settings, secrets, or prior execution is safe. Never execute suspected historical assets. Recheck a fresh checkout and trusted host state separately before using this as runtime security evidence.
